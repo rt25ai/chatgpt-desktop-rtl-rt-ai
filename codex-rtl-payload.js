@@ -11,6 +11,42 @@
 // re-patching an install made by the older Codex-RT-AI patcher stays
 // idempotent.
 //
+// ---------------------------------------------------------------------------
+// THE ONE RULE THIS PATCH IS BUILT AROUND: never write dir= or lang=
+// ---------------------------------------------------------------------------
+// The ChatGPT desktop UI is built with Tailwind v4. Its `rtl:` variant
+// compiles to selectors shaped like:
+//
+//   .rtl\:end-4:where(:is(:lang(ar),...,:lang(he),...),[dir=rtl],[dir=rtl] *)
+//       { inset-inline-end: ... }
+//
+// so putting dir="rtl" (or lang="he") on ANY element switches those rules on
+// for that element and every descendant. This build ships 30 such rules -
+// flex-row-reverse, rotate-180, translate-x-full, inset-inline-end - and on
+// top of that the UA stylesheet maps [dir=rtl] to direction:rtl, which flips
+// ~280 logical-property declarations (padding-inline-*, margin-inline-*,
+// inset-inline-*).
+//
+// Applied to app chrome that was laid out for LTR, that reverses flex rows,
+// rotates chevrons 180deg and translates popovers, switches and menus away
+// from where they are painted - so clicks land on empty space. That is what
+// made buttons stop responding in the previous version of this patch.
+//
+// Two facts (verified in Chromium) make a safe patch possible:
+//   1. The CSS `direction` property does NOT match [dir=rtl] or :dir(rtl).
+//      Setting direction in CSS flips logical properties without ever waking
+//      up the app's rtl: variants.
+//   2. `unicode-bidi: plaintext` resolves each paragraph's base direction
+//      from its first strong character, and `text-align: start` resolves
+//      against that. It aligns Hebrew right and English left with zero
+//      layout change - it is not an inherited property, so it only ever
+//      affects the inline content of the element it is set on.
+//
+// So: alignment is done in CSS, the stylesheet is injected into its own
+// lowest-priority cascade layer (every app rule keeps winning), and the small
+// amount of JavaScript only ever toggles a class - never dir, never lang,
+// never an inline style.
+//
 // Part of the RT-AI tooling suite (https://rt-ai.co.il).
 // ===========================================================================
 
@@ -22,255 +58,375 @@
     if (window.__RT_AI_CODEX_RTL_PATCH__) return;
     window.__RT_AI_CODEX_RTL_PATCH__ = true;
 
-    var INPUT_SEL = ".ProseMirror, [contenteditable=\"true\"], textarea, input[type=\"text\"], input:not([type])";
-    var CODE_SEL = "pre, code, .cm-editor, .monaco-editor, .shiki, .hljs, [data-language]";
-    var TEXT_SEL = "p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, summary, label, legend, dt, dd, figcaption, caption";
-    var INLINE_SEL = "div, span, button, a, label";
+    var VERSION = "2.0.0";
+    var STYLE_ID = "rt-ai-codex-rtl-styles";
 
-    function isRTLChar(ch) {
-        var code = ch.charCodeAt(0);
-        return (code >= 0x0590 && code <= 0x05ff) ||
-            (code >= 0x0600 && code <= 0x06ff) ||
-            (code >= 0x0750 && code <= 0x077f) ||
-            (code >= 0x08a0 && code <= 0x08ff) ||
-            (code >= 0xfb1d && code <= 0xfdff) ||
-            (code >= 0xfe70 && code <= 0xfeff);
+    // Class names the patch owns. Nothing else about an element is touched.
+    var CLS_FLIP = "rt-ai-rtl";       // structural flip: lists, blockquotes
+    var CLS_TEXT = "rt-ai-rtl-text";  // force a text block to an RTL base
+
+    // Where message content lives. The patch only ever adds classes inside one
+    // of these; if a future build renames them the CSS half still works and
+    // the JS half simply does nothing.
+    //
+    // The desktop build renders every message through a CSS-module wrapper
+    // named _MarkdownRoot_<hash> - the hash changes with each release but the
+    // component name does not, so match on the prefix. The rest are the hooks
+    // chatgpt.com and older desktop builds use.
+    var CONTENT_ROOT_SEL = [
+        "[class*=\"_MarkdownRoot_\"]",
+        ".markdown",
+        ".prose",
+        "[data-message-author-role]",
+        "[data-testid^=\"conversation-turn\"]",
+        "article"
+    ].join(", ");
+
+    // Blocks whose base direction we may override.
+    var BLOCK_SEL = "p, li, blockquote, h1, h2, h3, h4, h5, h6, dd, dt, td, th, figcaption";
+    // Containers we flip structurally so bullets, numbers and quote bars sit
+    // on the correct side.
+    var FLIP_SEL = "ul, ol, blockquote";
+
+    var CODE_SEL = "pre, code, kbd, samp, .cm-editor, .monaco-editor, .shiki, .hljs, [data-language]";
+    var EDITABLE_SEL = "[contenteditable=\"true\"], [contenteditable=\"\"]";
+
+    // -----------------------------------------------------------------------
+    // Direction detection
+    // -----------------------------------------------------------------------
+
+    function isRTLChar(code) {
+        return (code >= 0x0590 && code <= 0x05ff) ||   // Hebrew
+            (code >= 0x0600 && code <= 0x06ff) ||      // Arabic
+            (code >= 0x0700 && code <= 0x074f) ||      // Syriac
+            (code >= 0x0750 && code <= 0x077f) ||      // Arabic Supplement
+            (code >= 0x0780 && code <= 0x07bf) ||      // Thaana
+            (code >= 0x08a0 && code <= 0x08ff) ||      // Arabic Extended-A
+            (code >= 0xfb1d && code <= 0xfdff) ||      // Hebrew/Arabic presentation
+            (code >= 0xfe70 && code <= 0xfeff);        // Arabic presentation-B
     }
 
-    function hasRTL(text) {
-        if (!text) return false;
-        for (var i = 0; i < text.length; i++) {
-            if (isRTLChar(text[i])) return true;
-        }
-        return false;
+    function isLatinChar(code) {
+        return (code >= 0x0041 && code <= 0x005a) ||
+            (code >= 0x0061 && code <= 0x007a) ||
+            (code >= 0x00c0 && code <= 0x024f);
     }
 
+    // First strong character decides what `unicode-bidi: plaintext` will do on
+    // its own, so we only need to intervene when it disagrees with the text as
+    // a whole.
     function firstStrong(text) {
-        if (!text) return null;
         for (var i = 0; i < text.length; i++) {
-            if (isRTLChar(text[i])) return "rtl";
-            if (/[A-Za-z]/.test(text[i])) return "ltr";
+            var code = text.charCodeAt(i);
+            if (isRTLChar(code)) return "rtl";
+            if (isLatinChar(code)) return "ltr";
         }
         return null;
     }
 
-    function textWithoutCode(el) {
+    // "ChatGPT הוא כלי מצוין" starts with a Latin product name but is a Hebrew
+    // sentence, so plaintext would leave it left-aligned. Decide those by which
+    // script actually carries the paragraph. Text that is mostly Latin with a
+    // few Hebrew words stays LTR.
+    function detectTextDir(text) {
+        if (!text) return null;
+        var rtl = 0;
+        var ltr = 0;
+        for (var i = 0; i < text.length; i++) {
+            var code = text.charCodeAt(i);
+            if (isRTLChar(code)) rtl++;
+            else if (isLatinChar(code)) ltr++;
+        }
+        if (rtl === 0) return "ltr";
+        return rtl > ltr ? "rtl" : "ltr";
+    }
+
+    // Text of an element with code spans removed - a Hebrew paragraph that
+    // quotes a long snippet of English code is still a Hebrew paragraph.
+    function textWithoutCode(el, budget) {
         var out = "";
-        var nodes = el.childNodes || [];
-        for (var i = 0; i < nodes.length; i++) {
+        var nodes = el.childNodes;
+        for (var i = 0; i < nodes.length && out.length < budget; i++) {
             var node = nodes[i];
             if (node.nodeType === 3) {
-                out += node.textContent || "";
-            } else if (node.nodeType === 1 && !node.matches(CODE_SEL)) {
-                out += textWithoutCode(node);
+                out += node.nodeValue || "";
+            } else if (node.nodeType === 1 && !matches(node, CODE_SEL)) {
+                out += textWithoutCode(node, budget - out.length);
             }
         }
         return out;
     }
 
-    function stripLeadingLTR(text) {
-        return String(text || "")
-            .replace(/^[\s]*(?:[\w.-]+\.[A-Za-z]{1,8})\s*/g, "")
-            .replace(/https?:\/\/\S+/g, "")
-            .replace(/[\w.-]+[\/\\][\w.\/\\-]+/g, "")
-            .replace(/`[^`]+`/g, "")
-            .replace(/^[\s\d()[\]{}.,:;'"!?@#$%^&*_+=|<>/-]+/g, "");
-    }
-
-    function detectTextDir(text) {
-        if (!text || !String(text).trim()) return null;
-        var dir = firstStrong(text);
-        if (dir === "rtl") return "rtl";
-        if (!hasRTL(text)) return "ltr";
-        dir = firstStrong(stripLeadingLTR(text));
-        return dir === "rtl" ? "rtl" : "ltr";
-    }
-
-    function detectElDir(el) {
-        var full = el.textContent || "";
-        if (!hasRTL(full)) return null;
-        var noCode = textWithoutCode(el);
-        return detectTextDir(noCode) === "rtl" ? "rtl" : null;
-    }
-
-    function qsa(root, selector) {
-        var base = root && root.querySelectorAll ? root : document;
-        var els = Array.prototype.slice.call(base.querySelectorAll(selector));
-        if (root && root.matches && root.matches(selector)) els.unshift(root);
-        return els;
-    }
-
-    function isInsideCode(el) {
-        return !!(el && el.closest && el.closest(CODE_SEL));
-    }
-
-    function isInsideInput(el) {
-        return !!(el && el.closest && el.closest(INPUT_SEL));
-    }
-
-    function forceCodeLTR(root) {
-        qsa(root, CODE_SEL).forEach(function (el) {
-            el.dir = "ltr";
-            el.style.direction = "ltr";
-            el.style.textAlign = "left";
-            el.style.unicodeBidi = el.tagName === "CODE" ? "isolate" : "embed";
-        });
-    }
-
-    function applyBlockDir(el, dir) {
-        if (dir === "rtl") {
-            el.dir = "rtl";
-            el.style.direction = "rtl";
-            el.style.textAlign = "start";
-            el.style.unicodeBidi = "plaintext";
-            if (el.tagName === "LI") {
-                el.style.listStylePosition = "inside";
-                var list = el.closest("ul, ol");
-                if (list && !list.hasAttribute("dir")) {
-                    list.dir = "rtl";
-                    list.style.direction = "rtl";
-                    list.style.textAlign = "start";
-                }
-            }
-        } else if (el.hasAttribute("dir")) {
-            el.removeAttribute("dir");
-            el.style.direction = "";
-            el.style.textAlign = "";
-            el.style.unicodeBidi = "";
-            if (el.tagName === "LI") el.style.listStylePosition = "";
+    // A list gets its base direction from its items, not from the character
+    // count of the whole list: one long English bullet inside an otherwise
+    // Hebrew list must not drag the markers back to the left. Ties go to RTL,
+    // but only when at least one item really is RTL.
+    function listDir(el, fallback) {
+        if (el.tagName !== "UL" && el.tagName !== "OL") return fallback;
+        var items = el.children;
+        var rtl = 0;
+        var ltr = 0;
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].tagName !== "LI") continue;
+            var d = detectTextDir(textWithoutCode(items[i], TEXT_BUDGET));
+            if (d === "rtl") rtl++;
+            else if (d === "ltr") ltr++;
         }
+        if (rtl === 0 && ltr === 0) return fallback;
+        return rtl >= ltr && rtl > 0 ? "rtl" : "ltr";
     }
 
-    function processText(root) {
-        qsa(root, TEXT_SEL).forEach(function (el) {
-            if (isInsideInput(el) || isInsideCode(el)) return;
-            applyBlockDir(el, detectElDir(el));
-        });
-
-        qsa(root, "ul, ol").forEach(function (el) {
-            if (isInsideInput(el) || isInsideCode(el)) return;
-            applyBlockDir(el, detectElDir(el));
-        });
+    function matches(el, sel) {
+        return !!(el && el.matches && el.matches(sel));
     }
 
-    function processInlineContainers(root) {
-        qsa(root, INLINE_SEL).forEach(function (el) {
-            if (isInsideInput(el) || isInsideCode(el)) return;
-            if (el.querySelector && el.querySelector(TEXT_SEL + ", ul, ol, pre, code, table")) return;
-            var text = (el.textContent || "").trim();
-            if (text.length < 2) return;
-
-            if (hasRTL(text)) {
-                el.dir = detectTextDir(text) || "rtl";
-                el.style.textAlign = "start";
-                el.style.unicodeBidi = "plaintext";
-            } else if (el.hasAttribute("dir")) {
-                el.removeAttribute("dir");
-                el.style.textAlign = "";
-                el.style.unicodeBidi = "";
-            }
-        });
+    function closest(el, sel) {
+        return el && el.closest ? el.closest(sel) : null;
     }
 
-    function readInputText(el) {
-        if ("value" in el) return el.value || "";
-        return el.textContent || el.innerText || "";
-    }
-
-    function processInputElement(el) {
-        var dir = detectTextDir(readInputText(el));
-        if (dir === "rtl") {
-            el.dir = "rtl";
-            el.style.direction = "rtl";
-            el.style.textAlign = "right";
-            el.style.unicodeBidi = "plaintext";
-        } else if (dir === "ltr") {
-            el.dir = "ltr";
-            el.style.direction = "ltr";
-            el.style.textAlign = "left";
-            el.style.unicodeBidi = "plaintext";
-        } else {
-            el.removeAttribute("dir");
-            el.style.direction = "";
-            el.style.textAlign = "";
-            el.style.unicodeBidi = "";
-        }
-    }
-
-    function processInputs(root) {
-        qsa(root, INPUT_SEL).forEach(processInputElement);
-    }
-
-    function processAll(root) {
-        var base = root || document.body || document;
-        processText(base);
-        processInlineContainers(base);
-        processInputs(base);
-        forceCodeLTR(base);
-    }
+    // -----------------------------------------------------------------------
+    // Stylesheet - this is where almost all of the work happens
+    // -----------------------------------------------------------------------
 
     function injectStyles() {
-        if (document.getElementById("rt-ai-codex-rtl-styles")) return;
+        if (document.getElementById(STYLE_ID)) return;
+        var head = document.head || document.documentElement;
+        if (!head) return;
+
         var style = document.createElement("style");
-        style.id = "rt-ai-codex-rtl-styles";
+        style.id = STYLE_ID;
         style.textContent = [
-            ".ProseMirror[dir=\"rtl\"],textarea[dir=\"rtl\"],input[dir=\"rtl\"]{direction:rtl!important;text-align:right!important;unicode-bidi:plaintext!important}",
-            ".ProseMirror[dir=\"ltr\"],textarea[dir=\"ltr\"],input[dir=\"ltr\"]{direction:ltr!important;text-align:left!important;unicode-bidi:plaintext!important}",
-            "[dir=\"rtl\"]{direction:rtl!important;text-align:start!important}",
-            "[dir=\"ltr\"]{direction:ltr!important}",
-            "p,li,h1,h2,h3,h4,h5,h6,blockquote,td,th,summary,label,legend,dt,dd,figcaption,caption{unicode-bidi:plaintext}",
-            "pre,.cm-editor,.monaco-editor,.shiki,.hljs,[data-language]{direction:ltr!important;text-align:left!important;unicode-bidi:embed!important}",
-            "code{direction:ltr!important;unicode-bidi:isolate!important}"
+            // Declared in its own layer, and inserted as the first stylesheet in
+            // the document, so `rt-ai-rtl` is the first layer name the cascade
+            // sees and therefore the weakest. Every app rule - layered or not -
+            // still wins over everything below. No !important anywhere.
+            "@layer rt-ai-rtl {",
+
+            // 1. Per-paragraph automatic direction. `unicode-bidi` is not an
+            //    inherited property, so each of these only affects the inline
+            //    text of the element itself: no box, flexbox or grid layout
+            //    changes anywhere in the app.
+            //
+            //    Deliberately limited to semantic text elements and inputs.
+            //    `div`, `span` and `button` are NOT in this list: app chrome is
+            //    built out of those, the app already puts dir="auto" on the
+            //    chrome text that needs it (conversation titles and so on), and
+            //    giving a chrome flex row its own base direction moves its
+            //    inline children. Content and input is our business; the app's
+            //    own furniture is not.
+            "  p, li, blockquote, h1, h2, h3, h4, h5, h6,",
+            "  dd, dt, figcaption, caption, td, th,",
+            "  textarea, input:not([type]), input[type=\"text\"], input[type=\"search\"],",
+            "  .markdown, .prose, .ProseMirror, .ProseMirror > * {",
+            "    unicode-bidi: plaintext;",
+            "  }",
+
+            // 2. Composer: ProseMirror and other rich editors render each line
+            //    as a block child, so give those children their own base
+            //    direction too. Purely visual - the editor's own DOM is never
+            //    modified by this patch.
+            "  [contenteditable=\"true\"] > div, [contenteditable=\"true\"] > p,",
+            "  [contenteditable=\"true\"] > li, [contenteditable=\"\"] > div {",
+            "    unicode-bidi: plaintext;",
+            "  }",
+
+            // 3. Code always reads left to right, including inline code sitting
+            //    inside a Hebrew sentence.
+            "  pre, code, kbd, samp, .cm-editor, .monaco-editor, .shiki, .hljs, [data-language] {",
+            "    direction: ltr;",
+            "    unicode-bidi: isolate;",
+            "  }",
+            "  pre, pre code, .cm-editor, .monaco-editor { text-align: left; }",
+
+            // 4. Structural flip. Applied by the observer below to Hebrew and
+            //    Arabic lists and quotes inside message content only, so list
+            //    markers, list indentation and quote bars land on the right.
+            //    This sets the CSS `direction` property and never the dir
+            //    attribute, so the app's Tailwind rtl: variants stay off.
+            "  ." + CLS_FLIP + " { direction: rtl; }",
+            "  ." + CLS_FLIP + " > li { unicode-bidi: plaintext; }",
+
+            // 5. Force an RTL base on a block whose first strong character is
+            //    Latin but whose body is Hebrew or Arabic. `isolate` rather
+            //    than `plaintext` here, because plaintext would re-derive the
+            //    direction from that same leading Latin word.
+            "  ." + CLS_TEXT + " {",
+            "    direction: rtl;",
+            "    unicode-bidi: isolate;",
+            "    text-align: start;",
+            "  }",
+            "  ." + CLS_TEXT + " pre, ." + CLS_TEXT + " code,",
+            "  ." + CLS_FLIP + " pre, ." + CLS_FLIP + " code { direction: ltr; }",
+
+            "}"
         ].join("\n");
-        document.head.appendChild(style);
+
+        // First stylesheet in the document => lowest cascade layer.
+        if (head.firstChild) head.insertBefore(style, head.firstChild);
+        else head.appendChild(style);
     }
 
-    function schedule(root) {
-        if (window.__RT_AI_CODEX_RTL_TIMER__) return;
-        window.__RT_AI_CODEX_RTL_TIMER__ = window.setTimeout(function () {
-            window.__RT_AI_CODEX_RTL_TIMER__ = null;
-            processAll(root || document.body || document);
-        }, 50);
+    // -----------------------------------------------------------------------
+    // Class toggling - the only DOM writes this patch performs
+    // -----------------------------------------------------------------------
+
+    var TEXT_BUDGET = 4000;   // chars of an element we bother to inspect
+    var WORK_PER_FRAME = 400; // elements processed per animation frame
+    var MAX_QUEUE = 4000;
+
+    var lastSeen = typeof WeakMap === "function" ? new WeakMap() : null;
+
+    function unchanged(el, len) {
+        if (!lastSeen) return false;
+        if (lastSeen.get(el) === len) return true;
+        lastSeen.set(el, len);
+        return false;
     }
+
+    function applyTo(el) {
+        // Never touch anything the editor owns: ProseMirror rewrites its own
+        // DOM and would fight us. The stylesheet already handles the composer.
+        if (closest(el, EDITABLE_SEL)) return;
+        if (closest(el, CODE_SEL)) return;
+        if (!closest(el, CONTENT_ROOT_SEL)) return;
+
+        var raw = el.textContent || "";
+        if (unchanged(el, raw.length)) return;
+        if (!raw) {
+            el.classList.remove(CLS_FLIP, CLS_TEXT);
+            return;
+        }
+
+        var text = raw.length > TEXT_BUDGET ? raw.slice(0, TEXT_BUDGET) : raw;
+        var dir = detectTextDir(textWithoutCode(el, TEXT_BUDGET) || text);
+
+        if (matches(el, FLIP_SEL)) {
+            el.classList.toggle(CLS_FLIP, listDir(el, dir) === "rtl");
+        }
+        if (matches(el, BLOCK_SEL)) {
+            // plaintext already gets this right when the first strong character
+            // is RTL, so only add the class when the two disagree.
+            var needsForce = dir === "rtl" && firstStrong(text) === "ltr";
+            el.classList.toggle(CLS_TEXT, needsForce);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Scheduling
+    // -----------------------------------------------------------------------
+
+    var queue = [];
+    var queued = typeof Set === "function" ? new Set() : null;
+    var frame = 0;
+    var fullScanPending = false;
+
+    var raf = window.requestAnimationFrame
+        ? window.requestAnimationFrame.bind(window)
+        : function (fn) { return window.setTimeout(fn, 16); };
+
+    function enqueue(el) {
+        if (!el || el.nodeType !== 1) return;
+        if (queued) {
+            if (queued.has(el)) return;
+            queued.add(el);
+        }
+        queue.push(el);
+        if (queue.length > MAX_QUEUE) fullScanPending = true;
+    }
+
+    // Collect the candidate elements inside a subtree that was just added or
+    // changed - not the whole document.
+    function collect(root) {
+        if (!root || root.nodeType !== 1) return;
+        if (matches(root, FLIP_SEL) || matches(root, BLOCK_SEL)) enqueue(root);
+        if (!root.querySelectorAll) return;
+        var found = root.querySelectorAll(FLIP_SEL + ", " + BLOCK_SEL);
+        for (var i = 0; i < found.length; i++) enqueue(found[i]);
+    }
+
+    function scheduleFlush() {
+        if (frame) return;
+        frame = raf(flush);
+    }
+
+    function flush() {
+        frame = 0;
+
+        if (fullScanPending) {
+            fullScanPending = false;
+            queue.length = 0;
+            if (queued) queued.clear();
+            var roots = document.querySelectorAll(CONTENT_ROOT_SEL);
+            for (var r = 0; r < roots.length; r++) collect(roots[r]);
+        }
+
+        var budget = WORK_PER_FRAME;
+        while (queue.length && budget-- > 0) {
+            var el = queue.shift();
+            if (queued) queued.delete(el);
+            if (!el.isConnected) continue;
+            try {
+                applyTo(el);
+            } catch (err) {
+                /* one bad node must never take the observer down */
+            }
+        }
+
+        if (queue.length) scheduleFlush();
+    }
+
+    // -----------------------------------------------------------------------
+    // Boot
+    // -----------------------------------------------------------------------
 
     function init() {
         injectStyles();
-        processAll(document.body || document);
 
-        document.addEventListener("input", function (event) {
-            var target = event.target;
-            if (!target || !target.matches) return;
-            if (target.matches(INPUT_SEL) || (target.closest && target.closest(INPUT_SEL))) {
-                processInputElement(target.closest(INPUT_SEL) || target);
-                schedule(document.body || document);
-            }
-        }, true);
+        fullScanPending = true;
+        scheduleFlush();
 
         var observer = new MutationObserver(function (mutations) {
-            var roots = [];
             for (var i = 0; i < mutations.length; i++) {
-                var mutation = mutations[i];
-                if (mutation.type === "characterData" && mutation.target.parentElement) {
-                    roots.push(mutation.target.parentElement);
+                var m = mutations[i];
+                if (m.type === "characterData") {
+                    var host = m.target.parentElement;
+                    if (host) {
+                        // Streamed tokens land in a text node: re-check the block
+                        // that owns it, and the list it may belong to.
+                        if (matches(host, FLIP_SEL) || matches(host, BLOCK_SEL)) enqueue(host);
+                        var owner = closest(host, FLIP_SEL + ", " + BLOCK_SEL);
+                        if (owner && owner !== host) enqueue(owner);
+                    }
+                    continue;
                 }
-                for (var j = 0; j < mutation.addedNodes.length; j++) {
-                    var node = mutation.addedNodes[j];
-                    if (node.nodeType === 1) roots.push(node);
+                for (var j = 0; j < m.addedNodes.length; j++) {
+                    var node = m.addedNodes[j];
+                    if (node.nodeType === 1) collect(node);
+                    else if (node.nodeType === 3 && m.target && m.target.nodeType === 1) collect(m.target);
                 }
             }
-
-            if (roots.length === 0) return;
-            if (roots.length <= 30) {
-                roots.forEach(processAll);
-                processInputs(document);
-            } else {
-                schedule(document.body || document);
-            }
+            if (queue.length || fullScanPending) scheduleFlush();
         });
 
-        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-        console.info("[RT-AI ChatGPT RTL] patch active");
+        observer.observe(document.body || document.documentElement, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+
+        window.__RT_AI_CODEX_RTL_INFO__ = {
+            version: VERSION,
+            styleId: STYLE_ID,
+            classes: [CLS_FLIP, CLS_TEXT],
+            rescan: function () { fullScanPending = true; scheduleFlush(); }
+        };
+
+        console.info("[RT-AI ChatGPT RTL] patch active (v" + VERSION + ")");
     }
+
+    // The stylesheet must go in as early as possible so the first paint is
+    // already correct; the observer needs a body.
+    injectStyles();
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", init, { once: true });

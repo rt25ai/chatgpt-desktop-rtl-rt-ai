@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RT-AI RTL harness</title>
+<style>
+  /* The app declares this layer order in its own index.html. */
+  @layer theme, base, components, utilities;
+
+  @layer base {
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; font-size: 14px; direction: ltr; }
+  }
+
+  @layer utilities {
+    /*
+      Verbatim shape of the Tailwind v4 `rtl:` variant this build of ChatGPT
+      desktop ships. Copied from webview/assets/app-initial-*.css:
+
+        .rtl\:end-4:where(:is(:lang(ae),...,:lang(he),...),[dir=rtl],[dir=rtl] *)
+
+      Anything that sets dir="rtl" or lang="he" anywhere above these elements
+      switches them on.
+    */
+    .rtl\:flex-row-reverse:where(:is(:lang(ar),:lang(fa),:lang(he),:lang(ur)),[dir=rtl],[dir=rtl] *) { flex-direction: row-reverse; }
+    .rtl\:rotate-180:where(:is(:lang(ar),:lang(fa),:lang(he),:lang(ur)),[dir=rtl],[dir=rtl] *)       { rotate: 180deg; }
+    .rtl\:translate-x-full:where(:is(:lang(ar),:lang(fa),:lang(he),:lang(ur)),[dir=rtl],[dir=rtl] *) { translate: 100% 0; }
+    .rtl\:start-auto:where(:is(:lang(ar),:lang(fa),:lang(he),:lang(ur)),[dir=rtl],[dir=rtl] *)       { inset-inline-start: auto; }
+    .rtl\:end-4:where(:is(:lang(ar),:lang(fa),:lang(he),:lang(ur)),[dir=rtl],[dir=rtl] *)            { inset-inline-end: 16px; }
+
+    /* Logical-property utilities: these flip on the CSS `direction` property
+       alone, with or without the dir attribute. */
+    .ps-3  { padding-inline-start: 12px; }
+    .pe-2  { padding-inline-end: 8px; }
+    .ms-auto { margin-inline-start: auto; }
+    .start-2 { inset-inline-start: 8px; }
+    .end-2   { inset-inline-end: 8px; }
+    .border-s-4 { border-inline-start: 4px solid #d33; }
+  }
+
+  @layer components {
+    .app      { display: flex; height: 520px; width: 900px; border: 1px solid #ccc; }
+    .sidebar  { width: 240px; border-right: 1px solid #ddd; padding: 8px; flex: none; }
+    .row      { display: flex; align-items: center; gap: 8px; height: 32px; position: relative; }
+    .row .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+    .icon     { width: 16px; height: 16px; background: #444; flex: none; border-radius: 3px; }
+    .trash    { position: absolute; width: 20px; height: 20px; background: #b33; top: 6px; }
+    .main     { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+    .topbar   { display: flex; align-items: center; gap: 8px; height: 44px; border-bottom: 1px solid #ddd; padding: 0 12px; position: relative; }
+    .popover  { position: absolute; top: 40px; width: 180px; height: 90px; background: #eef; border: 1px solid #99c; }
+    .switch   { width: 34px; height: 18px; background: #ddd; border-radius: 9px; position: relative; }
+    .knob     { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: #333; border-radius: 50%; }
+    .thread   { flex: 1 1 auto; overflow: auto; padding: 16px; }
+    .markdown { max-width: 640px; }
+    .markdown p { margin: 0 0 12px; }
+    .markdown pre { background: #f5f5f5; padding: 8px; overflow-x: auto; }
+    .composer { border-top: 1px solid #ddd; padding: 10px; }
+    .ProseMirror { min-height: 48px; outline: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="row" id="row-he">
+      <span class="icon" id="row-he-icon"></span>
+      <span class="title">שיחה על תכנון מערכת בעברית</span>
+      <span class="trash end-2" id="row-he-trash"></span>
+    </div>
+    <div class="row" id="row-en">
+      <span class="icon" id="row-en-icon"></span>
+      <span class="title">System design conversation</span>
+      <span class="trash end-2" id="row-en-trash"></span>
+    </div>
+    <div class="row rtl:flex-row-reverse" id="row-flip">
+      <span class="icon" id="row-flip-icon"></span>
+      <span class="title">פרויקטים שלי</span>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar" id="topbar">
+      <button class="row" id="model-btn" style="width:170px">
+        <span class="title">מודל: ChatGPT 5</span>
+        <span class="icon rtl:rotate-180" id="chevron"></span>
+      </button>
+      <div class="switch ms-auto" id="switch"><span class="knob rtl:translate-x-full" id="knob"></span></div>
+      <div class="popover rtl:start-auto rtl:end-4 start-2" id="popover">תפריט בעברית</div>
+    </div>
+
+    <div class="thread" id="thread">
+      <article data-message-author-role="assistant">
+        <div class="markdown" id="md">
+          <p id="p-he">שלום, זהו טקסט בעברית שאמור להיות מיושר לימין.</p>
+          <p id="p-en">Hello, this is english text that must stay on the left.</p>
+          <p id="p-mixed">ChatGPT הוא כלי מצוין לעבודה יומיומית ולכתיבת קוד בעברית.</p>
+          <p id="p-ltrdom">The library <code>react-dom</code> renders בעברית sometimes.</p>
+          <ul id="ul-he"><li id="li-he1">פריט ראשון ברשימה</li><li id="li-he2">english item inside a hebrew list</li></ul>
+          <ul id="ul-en"><li id="li-en1">First english item</li></ul>
+          <blockquote id="bq-he" class="border-s-4 ps-3">ציטוט חשוב בעברית</blockquote>
+          <pre id="pre1"><code id="code1">const greeting = "שלום";
+console.log(greeting);</code></pre>
+          <p id="p-inline">הפונקציה <code id="code2">Array.prototype.map()</code> מחזירה מערך חדש.</p>
+        </div>
+      </article>
+    </div>
+
+    <div class="composer">
+      <div class="ProseMirror" id="pm" contenteditable="true">
+        <div id="pm-l1">שורה ראשונה בעברית</div>
+        <div id="pm-l2">second line in english</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Measurement
+// ---------------------------------------------------------------------------
+const CHROME_PROBES = [
+  'row-he-icon', 'row-he-trash', 'row-en-icon', 'row-en-trash',
+  'row-flip-icon', 'model-btn', 'chevron', 'switch', 'knob', 'popover',
+  'sidebar', 'topbar'
+];
+
+const TEXT_PROBES = ['p-he','p-en','p-mixed','p-ltrdom','li-he1','li-he2','li-en1','bq-he','pre1','code2','pm-l1','pm-l2'];
+
+function rectOf(id) {
+  const el = document.getElementById(id);
+  const r = el.getBoundingClientRect();
+  return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+}
+
+// Where the visible text sits inside its own box: distance from the left edge
+// and from the right edge. Hebrew should hug the right, english the left.
+function textPos(id) {
+  const el = document.getElementById(id);
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const t = range.getBoundingClientRect();
+  const b = el.getBoundingClientRect();
+  if (!t.width) return { side: 'empty' };
+  const left = t.left - b.left;
+  const right = b.right - t.right;
+  return {
+    left: Math.round(left),
+    right: Math.round(right),
+    side: Math.abs(left - right) < 4 ? 'center' : (left > right ? 'right' : 'left')
+  };
+}
+
+// Does an element sit where a click at its painted centre would reach it?
+// This is what "the button stopped responding" actually means: the paint moved
+// away from the hit target, or a mispositioned overlay covers it.
+function hitTest(id) {
+  const el = document.getElementById(id);
+  const r = el.getBoundingClientRect();
+  const hit = document.elementFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+  return !!(hit && (hit === el || el.contains(hit) || hit.contains(el)));
+}
+
+function snapshot() {
+  const chrome = {};
+  for (const id of CHROME_PROBES) chrome[id] = rectOf(id);
+  const text = {};
+  for (const id of TEXT_PROBES) text[id] = textPos(id);
+  const hits = {};
+  for (const id of ['row-he-trash','row-en-trash','model-btn','chevron','knob']) hits[id] = hitTest(id);
+  const attrs = {
+    dirAttributes: document.querySelectorAll('[dir]').length,
+    langAttributes: document.querySelectorAll('[lang]:not(html)').length,
+    inlineStyled: document.querySelectorAll('#app [style]').length
+  };
+  return { chrome, text, hits, attrs };
+}
+
+window.__snapshot = snapshot;
+window.__baseline = snapshot();
+
+// ---------------------------------------------------------------------------
+// Payload loading: ?payload=old|new|none
+// ---------------------------------------------------------------------------
+const which = new URLSearchParams(location.search).get('payload') || 'none';
+window.__payload = which;
+if (which === 'old' || which === 'new') {
+  const s = document.createElement('script');
+  s.src = './payload-' + which + '.js';
+  s.onload = () => { document.title = 'loaded'; };
+  s.onerror = () => { document.title = 'error'; };
+  document.body.appendChild(s);
+} else {
+  document.title = 'loaded';
+}
+</script>
+</body>
+</html>

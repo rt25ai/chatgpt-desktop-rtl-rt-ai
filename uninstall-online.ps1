@@ -9,7 +9,7 @@ Downloads patch.ps1 and runs it with -Uninstall. No admin required.
 [CmdletBinding()]
 param(
     [string] $Repo = "rt25ai/codex-rtl-rt-ai",
-    [string] $Branch = "v0.3.0"
+    [string] $Branch = "v0.4.0"
 )
 
 $ErrorActionPreference = "Stop"

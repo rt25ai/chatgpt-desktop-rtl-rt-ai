@@ -33,7 +33,7 @@ without changing their original installation.
 פתחו **PowerShell** (לא חייב admin), הדביקו את השורה הזו, ולחצו Enter:
 
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.3.0/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/install-online.ps1 | iex
 ```
 
 זהו. בסוף יופיע קיצור דרך בשם **"ChatGPT"** על שולחן העבודה ובתפריט Start,
@@ -63,7 +63,7 @@ reports and pull requests are very welcome.
 פתחו **Terminal** והדביקו:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.3.0/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/install-online.sh | bash
 ```
 
 זה ייצור `~/Applications/ChatGPT-RT-AI.app` עם תמיכת RTL, מבלי לגעת
@@ -101,12 +101,12 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.3.0/insta
 
 **Windows:**
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.3.0/uninstall-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/uninstall-online.ps1 | iex
 ```
 
 **macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.3.0/uninstall-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/uninstall-online.sh | bash
 ```
 
 המקור (תחת `WindowsApps` ב-Windows, או `/Applications` ב-Mac)
@@ -126,7 +126,7 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.3.0/unins
 זה היה באג במשימת העדכון האוטומטי: היא הופעלה אחרי **כל** עדכון Microsoft Store
 ובחלון גלוי, במקום רק אחרי עדכון של האפליקציה. **תוקן.**
 
-לא צריך להסיר ולהתקין מחדש - התקנת v0.3.0 (השורה הרגילה למעלה) מחליפה את
+לא צריך להסיר ולהתקין מחדש - התקנת v0.4.0 (השורה הרגילה למעלה) מחליפה את
 המשימה הישנה במשימה החדשה והנקייה. לחלופין, לתיקון המשימה בלבד:
 
 ```powershell
@@ -134,6 +134,45 @@ irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/main/fix-autoupdate
 ```
 
 ---
+
+## v0.4.0 - תיקון כפתורים שלא הגיבו ועיצוב שבור
+
+בגרסאות עד `v0.3.0` הפאצ' היה כותב `dir="rtl"` על אלמנטים בתוך העמוד. זה
+נראה תמים, אבל ה-UI של ChatGPT Desktop בנוי ב-Tailwind v4, וה-variant
+בשם `rtl:` שלו מתקמפל לסלקטור כזה:
+
+```css
+.rtl\:end-4:where(:is(:lang(ar),…,:lang(he),…),[dir=rtl],[dir=rtl] *) { … }
+```
+
+כלומר `dir="rtl"` על אלמנט אחד מדליק את הכללים האלה על האלמנט **וכל
+הצאצאים שלו**. בבילד הנוכחי יש 30 כללים כאלה (`flex-row-reverse`,
+`rotate-180`, `translate-x-full`, `inset-inline-end`), ובנוסף דפדפן
+ממפה `[dir=rtl]` ל-`direction:rtl` - מה שהופך עוד ~280 הצהרות של
+logical properties (`padding-inline-*`, `margin-inline-*`, `inset-inline-*`).
+
+התוצאה: שורות flex התהפכו, חצים הסתובבו ב-180°, ותפריטים, מתגים וכפתורים
+זזו מהמקום שבו הם מצוירים - ולכן הקליקים "לא הגיבו".
+
+**מה השתנה ב-v0.4.0:**
+
+- הפאצ' **לעולם לא כותב `dir` או `lang`**. כיוון נקבע ב-CSS בלבד -
+  ותכונת ה-CSS ‏`direction` לא מפעילה את `[dir=rtl]` ולא את `:dir(rtl)`,
+  אז ה-variants של האפליקציה נשארים כבויים.
+- היישור נעשה עם `unicode-bidi: plaintext`, שקובע כיוון בסיס לכל פסקה
+  לפי התו החזק הראשון שלה. זו תכונה שאינה עוברת בירושה, ולכן היא משפיעה
+  רק על הטקסט של האלמנט עצמו - בלי שום שינוי layout.
+- הגיליון מוזרק כ-`@layer rt-ai-rtl` וכאלמנט הראשון ב-`<head>`, כך שהוא
+  ה-layer החלש ביותר: הוא גובר רק על ברירות המחדל של הדפדפן, ומפסיד לכל
+  כלל של האפליקציה. אין שום `!important`.
+- ה-JavaScript היחיד שנשאר רק **מוסיף class** לפסקאות ורשימות בתוך תוכן
+  ההודעות, לעולם לא inline-style ולא attribute, והוא מרוכז ב-frame אחד
+  במקום לסרוק את כל ה-DOM בכל mutation.
+
+הבדיקה ב-`tests/` מודדת כל אלמנט ב-chrome של האפליקציה עם הפאצ' ובלעדיו
+ונכשלת אם משהו זז אפילו פיקסל אחד.
+
+> אם התקנת גרסה קודמת - פשוט התקן מחדש עם השורה למעלה. אין צורך להסיר.
 
 ## איך זה עובד מבפנים
 
@@ -174,18 +213,44 @@ irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/main/fix-autoupdate
 |-- uninstall-online.sh      # מסיר one-liner - macOS
 |--
 |-- tests/verify-static.ps1  # בדיקות סטטיות
+|-- tests/rtl-harness.html   # חיקוי של ה-webview עם הסלקטורים האמיתיים
+|-- tests/run-rtl-harness.mjs # בדיקה התנהגותית - הפאצ' לא מזיז כלום
 |-- README.md
 |-- LICENSE
 ```
 
 ## ולידציה
 
+בדיקות סטטיות (מבנה הסקריפטים, ה-invariants של ה-payload, פינים לגרסה):
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\verify-static.ps1
 ```
 
+בדיקה התנהגותית - טוענת את ה-payload לתוך חיקוי של ה-webview (עם
+הסלקטורים האמיתיים של `rtl:` מהאפליקציה), מודדת כל אלמנט לפני ואחרי,
+ונכשלת אם משהו ב-chrome זז, אם נכתב `dir`/`lang`, או אם טקסט RTL לא
+מיושר נכון:
+
+```powershell
+node .\tests\run-rtl-harness.mjs
+```
+
 ## Known limitations
 
+- **The app has some RTL support of its own now.** Recent builds set
+  `<html lang="he" dir="rtl">` when the app language is Hebrew, and put
+  `dir="auto"` on conversation titles. Where the app already declares a
+  direction this patch stays out of the way by design - it only supplies
+  a direction where the app leaves one undecided. What it still adds:
+  paragraphs that open with a Latin word but are Hebrew ("ChatGPT הוא
+  כלי מצוין…"), list markers and quote bars on the correct side, code
+  blocks pinned left-to-right, and per-line direction in the composer.
+- **Mixed-language chrome labels are left alone.** A string like
+  "…reset on 7 בספטמבר, 7:27" inside the app's own UI can still read out
+  of order. Fixing that would mean overriding the direction of app
+  chrome, which is exactly what broke v0.3.0, so the patch deliberately
+  does not touch it.
 - **macOS support is experimental** - the script follows a standard
   Electron-patching pattern, but the author has not personally tested it
   on the unified app.
@@ -195,7 +260,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\verify-static.ps1
   bail out with a clear error rather than patch the wrong file - report
   it as an issue and a new release will be cut.
 - **Trust model:** the one-line installer is pinned to a signed release
-  tag (currently `v0.3.0`), not the `main` branch. A compromised `main`
+  tag (currently `v0.4.0`), not the `main` branch. A compromised `main`
   cannot silently affect users who run the published one-liner. The repo
   is small and auditable - read the scripts before you run them.
 
@@ -249,12 +314,12 @@ migrated automatically.
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.3.0/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/install-online.ps1 | iex
 ```
 
 ```bash
 # macOS (Terminal) - untested on the unified app, contributions welcome
-curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.3.0/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/install-online.sh | bash
 ```
 
 **Notes:**
@@ -269,7 +334,7 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.3.0/insta
 
 **Installed an earlier version and see a CMD window pop up every few minutes?**
 That was an auto-update task bug (it fired on every Microsoft Store update, in a
-visible window). Fixed - installing v0.3.0 replaces the old task. To fix just
+visible window). Fixed - installing v0.4.0 replaces the old task. To fix just
 the task (one UAC prompt):
 
 ```powershell

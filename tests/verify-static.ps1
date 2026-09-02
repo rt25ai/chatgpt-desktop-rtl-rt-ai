@@ -62,6 +62,32 @@ Assert-True ($payload.Contains("unicode-bidi")) "payload should set bidi-safe st
 Assert-True ($payload.Contains("RT-AI CODEX RTL PATCH END")) "payload end marker is missing"
 Assert-True (-not $payload.Contains("shraga100")) "payload should not reference the previous author"
 
+# --- The invariants that keep the app's own UI intact -----------------------
+# The ChatGPT webview is Tailwind v4. Its `rtl:` variant selector is
+#   .rtl\:x:where(:is(:lang(he),...),[dir=rtl],[dir=rtl] *)
+# so a single dir="rtl" or lang="he" anywhere switches those rules on for the
+# whole subtree, and [dir=rtl] additionally flips ~280 logical-property
+# declarations. That reverses flex rows and translates popovers, switches and
+# menu buttons away from where they are painted - which is what made buttons
+# stop responding in v0.3.0. The payload must express direction in CSS only.
+# Comments explain these rules, so assert against the code with `//` lines removed.
+$payloadCode = ($payload -split "`n" | Where-Object { $_ -notmatch '^\s*//' }) -join "`n"
+
+Assert-True (-not ($payloadCode -match '\.dir\s*=')) "payload must never assign the dir property (it turns on the app's Tailwind rtl: variants)"
+Assert-True (-not ($payloadCode -match 'setAttribute\(\s*[""'']dir')) "payload must never set a dir attribute"
+Assert-True (-not ($payloadCode -match 'setAttribute\(\s*[""'']lang')) "payload must never set a lang attribute (:lang(he) triggers the same rtl: variants)"
+Assert-True ($payload.Contains("@layer rt-ai-rtl")) "payload styles must live in their own cascade layer so app rules keep winning"
+Assert-True (-not ($payloadCode -match '!important')) "payload styles must not use !important"
+Assert-True ($payload.Contains("classList.toggle")) "payload should express direction by toggling its own classes"
+Assert-True ($payload.Contains("unicode-bidi: plaintext")) "payload should use unicode-bidi:plaintext for layout-neutral per-paragraph direction"
+Assert-True ($payload.Contains("insertBefore")) "payload stylesheet must be inserted first in <head> to sort into the weakest layer"
+Assert-True ($payload.Contains("requestAnimationFrame")) "payload should batch DOM work into a frame instead of scanning on every mutation"
+
+$harness = Join-Path $PSScriptRoot "rtl-harness.html"
+$harnessRunner = Join-Path $PSScriptRoot "run-rtl-harness.mjs"
+Assert-True (Test-Path -LiteralPath $harness) "tests/rtl-harness.html is missing"
+Assert-True (Test-Path -LiteralPath $harnessRunner) "tests/run-rtl-harness.mjs is missing"
+
 Assert-True ($readme.Contains("RT-AI")) "README should be branded as RT-AI"
 Assert-True ($readme.Contains("ChatGPT")) "README should describe the unified ChatGPT app"
 Assert-True ($readme.Contains("PowerShell")) "README should include PowerShell usage"
