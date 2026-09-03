@@ -50,6 +50,11 @@
     .popover  { position: absolute; top: 40px; width: 180px; height: 90px; background: #eef; border: 1px solid #99c; }
     .switch   { width: 34px; height: 18px; background: #ddd; border-radius: 9px; position: relative; }
     .knob     { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: #333; border-radius: 50%; }
+    /* A click-through overlay that still claims the OS drag region - the
+       upstream bug this patch works around. */
+    .phantom-drag { position: absolute; inset: 0; pointer-events: none; -webkit-app-region: drag; }
+    /* A genuine, interactive drag handle. The patch must NOT touch this one. */
+    .real-drag    { position: absolute; left: 0; top: 0; width: 60px; height: 44px; pointer-events: auto; -webkit-app-region: drag; }
     .thread   { flex: 1 1 auto; overflow: auto; padding: 16px; }
     .markdown { max-width: 640px; }
     .markdown p { margin: 0 0 12px; }
@@ -87,6 +92,17 @@
       </button>
       <div class="switch ms-auto" id="switch"><span class="knob rtl:translate-x-full" id="knob"></span></div>
       <div class="popover rtl:start-auto rtl:end-4 start-2" id="popover">תפריט בעברית</div>
+
+      <!--
+        Reproduces the upstream bug in ChatGPT desktop 26.831: a click-through
+        overlay that still claims an OS drag region, so Windows reports the
+        whole toolbar strip as HTCAPTION and the controls under it stop
+        responding to real mouse clicks. The patch must clear the region on
+        overlays like this one, and must leave the genuine (interactive) drag
+        handle alone.
+      -->
+      <div class="phantom-drag" id="phantom"></div>
+      <div class="real-drag" id="realdrag"></div>
     </div>
 
     <div class="thread" id="thread">

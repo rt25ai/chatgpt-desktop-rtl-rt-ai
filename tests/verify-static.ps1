@@ -83,6 +83,18 @@ Assert-True ($payload.Contains("unicode-bidi: plaintext")) "payload should use u
 Assert-True ($payload.Contains("insertBefore")) "payload stylesheet must be inserted first in <head> to sort into the weakest layer"
 Assert-True ($payload.Contains("requestAnimationFrame")) "payload should batch DOM work into a frame instead of scanning on every mutation"
 
+# --- Workaround for the upstream "toolbar is an OS title bar" bug -----------
+# ChatGPT desktop 26.831 lays click-through overlays across the toolbar that
+# still carry -webkit-app-region: drag. Chromium builds the OS drag region from
+# that property alone, so Windows reports the strip as HTCAPTION and real
+# clicks on the bell / search / mode switcher drag the window instead. The
+# payload clears the region ONLY on elements it has proved are non-interactive,
+# so a genuine drag handle is never taken away.
+Assert-True ($payloadCode -match 'pointerEvents\s*!==\s*"none"') "the no-drag workaround must only touch elements that cannot receive pointer events"
+Assert-True ($payload.Contains("-webkit-app-region: no-drag")) "payload should clear the phantom OS drag regions"
+Assert-True ($payload.Contains("rt-ai-nodrag")) "payload should mark phantom drag overlays with its own class"
+Assert-True (-not ($payloadCode -match '-webkit-app-region:\s*drag')) "payload must never create a drag region"
+
 $harness = Join-Path $PSScriptRoot "rtl-harness.html"
 $harnessRunner = Join-Path $PSScriptRoot "run-rtl-harness.mjs"
 Assert-True (Test-Path -LiteralPath $harness) "tests/rtl-harness.html is missing"

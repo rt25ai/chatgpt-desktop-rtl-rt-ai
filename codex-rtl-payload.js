@@ -58,12 +58,13 @@
     if (window.__RT_AI_CODEX_RTL_PATCH__) return;
     window.__RT_AI_CODEX_RTL_PATCH__ = true;
 
-    var VERSION = "2.0.0";
+    var VERSION = "2.1.0";
     var STYLE_ID = "rt-ai-codex-rtl-styles";
 
     // Class names the patch owns. Nothing else about an element is touched.
-    var CLS_FLIP = "rt-ai-rtl";       // structural flip: lists, blockquotes
-    var CLS_TEXT = "rt-ai-rtl-text";  // force a text block to an RTL base
+    var CLS_FLIP = "rt-ai-rtl";         // structural flip: lists, blockquotes
+    var CLS_TEXT = "rt-ai-rtl-text";    // force a text block to an RTL base
+    var CLS_NODRAG = "rt-ai-nodrag";    // see fixPhantomDragRegions()
 
     // Where message content lives. The patch only ever adds classes inside one
     // of these; if a future build renames them the CSS half still works and
@@ -90,6 +91,9 @@
 
     var CODE_SEL = "pre, code, kbd, samp, .cm-editor, .monaco-editor, .shiki, .hljs, [data-language]";
     var EDITABLE_SEL = "[contenteditable=\"true\"], [contenteditable=\"\"]";
+
+    var NODRAG_MAX_TOP = 200;    // px from the top of the viewport
+    var NODRAG_MAX_SCAN = 6000;  // elements examined per pass
 
     // -----------------------------------------------------------------------
     // Direction detection
@@ -258,7 +262,14 @@
             "  ." + CLS_TEXT + " pre, ." + CLS_TEXT + " code,",
             "  ." + CLS_FLIP + " pre, ." + CLS_FLIP + " code { direction: ltr; }",
 
-            "}"
+            "}",
+
+            // 6. Deliberately OUTSIDE the layer. Unlayered declarations beat
+            //    every layered one, which is what this rule needs: it has to
+            //    override the app's own `-webkit-app-region: drag`. It is only
+            //    ever applied to elements the scanner below proves are
+            //    non-interactive, so it cannot take a real drag handle away.
+            "." + CLS_NODRAG + " { -webkit-app-region: no-drag; }"
         ].join("\n");
 
         // First stylesheet in the document => lowest cascade layer.
@@ -309,6 +320,78 @@
             var needsForce = dir === "rtl" && firstStrong(text) === "ltr";
             el.classList.toggle(CLS_TEXT, needsForce);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Workaround for an upstream bug: the toolbar row is an OS title bar
+    // -----------------------------------------------------------------------
+    // ChatGPT desktop 26.831 paints several full-width overlays across the
+    // toolbar strip that carry BOTH `-webkit-app-region: drag` and
+    // `pointer-events: none`. Chromium builds the window's OS drag region from
+    // `-webkit-app-region` alone and ignores `pointer-events`, so the whole
+    // strip is reported to Windows as HTCAPTION. The notification bell, the
+    // search button and the Chat/Work/Codex mode switcher sit inside it, so a
+    // real mouse click starts a window drag and never reaches them - while a
+    // scripted click works fine, because in the page those overlays are
+    // click-through.
+    //
+    // This is not caused by the RTL patch: an untouched Store install of the
+    // same build reports HTCAPTION over exactly the same pixels. The fix is
+    // safe by construction - an element that cannot receive pointer events has
+    // no business claiming a drag handle, so we only clear the region on
+    // elements that are provably non-interactive. The real title bar (which is
+    // pointer-events: auto) keeps working, so the window can still be dragged.
+    //
+    // If OpenAI fixes this upstream, nothing matches and this becomes a no-op.
+    var lastNoDragScan = 0;
+    // Elements already examined. Keeps the steady-state cost near zero: the
+    // first pass pays for the whole document, later passes only look at nodes
+    // that appeared since. Cleared whenever a forced rescan is requested.
+    var seenForDrag = typeof WeakSet === "function" ? new WeakSet() : null;
+
+    function fixPhantomDragRegions() {
+        var els;
+        try {
+            els = document.querySelectorAll("*");
+        } catch (err) {
+            return 0;
+        }
+
+        var marked = 0;
+        var limit = Math.min(els.length, NODRAG_MAX_SCAN);
+        for (var i = 0; i < limit; i++) {
+            var el = els[i];
+            if (seenForDrag) {
+                if (seenForDrag.has(el)) continue;
+                seenForDrag.add(el);
+            }
+            if (el.classList.contains(CLS_NODRAG)) continue;
+
+            var rect = el.getBoundingClientRect();
+            if (rect.top > NODRAG_MAX_TOP || rect.width < 1 || rect.height < 1) continue;
+
+            var cs = window.getComputedStyle(el);
+            // An element that cannot receive pointer events cannot be a drag
+            // handle either - that is the whole basis for this workaround, so
+            // anything interactive is left exactly as the app declared it.
+            if (cs.pointerEvents !== "none") continue;
+
+            var region = cs.webkitAppRegion;
+            if (region == null) region = cs.getPropertyValue("-webkit-app-region");
+            if (region !== "drag") continue;
+
+            el.classList.add(CLS_NODRAG);
+            marked++;
+        }
+        return marked;
+    }
+
+    function scheduleNoDragScan(force) {
+        var now = Date.now();
+        if (!force && now - lastNoDragScan < 400) return;
+        lastNoDragScan = now;
+        if (force && typeof WeakSet === "function") seenForDrag = new WeakSet();
+        return fixPhantomDragRegions();
     }
 
     // -----------------------------------------------------------------------
@@ -372,6 +455,10 @@
             }
         }
 
+        // Cheap and throttled: the candidate set is small and the probe runs at
+        // most a few times a second, whatever the DOM is doing.
+        scheduleNoDragScan(false);
+
         if (queue.length) scheduleFlush();
     }
 
@@ -405,7 +492,10 @@
                     else if (node.nodeType === 3 && m.target && m.target.nodeType === 1) collect(m.target);
                 }
             }
-            if (queue.length || fullScanPending) scheduleFlush();
+            // The toolbar re-renders on navigation and on window state changes,
+            // so any mutation is a reason to re-check the drag regions. flush()
+            // throttles the actual probe.
+            scheduleFlush();
         });
 
         observer.observe(document.body || document.documentElement, {
@@ -414,11 +504,15 @@
             characterData: true
         });
 
+        scheduleNoDragScan(true);
+        window.addEventListener("resize", function () { scheduleNoDragScan(true); });
+
         window.__RT_AI_CODEX_RTL_INFO__ = {
             version: VERSION,
             styleId: STYLE_ID,
-            classes: [CLS_FLIP, CLS_TEXT],
-            rescan: function () { fullScanPending = true; scheduleFlush(); }
+            classes: [CLS_FLIP, CLS_TEXT, CLS_NODRAG],
+            rescan: function () { fullScanPending = true; scheduleFlush(); },
+            fixDragRegions: function () { return fixPhantomDragRegions(); }
         };
 
         console.info("[RT-AI ChatGPT RTL] patch active (v" + VERSION + ")");

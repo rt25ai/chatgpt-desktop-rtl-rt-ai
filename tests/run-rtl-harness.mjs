@@ -188,6 +188,45 @@ try {
     `hebrew blockquote bar should move to the right, got L=${lists.quoteBorderLeft} R=${lists.quoteBorderRight}`);
 
   // ---------------------------------------------------------------------
+  // 4b. Phantom OS drag regions.
+  //
+  // ChatGPT desktop 26.831 lays click-through overlays across the toolbar
+  // that still carry `-webkit-app-region: drag`. Chromium builds the window's
+  // drag region from that property alone and ignores `pointer-events`, so
+  // Windows reports the strip as HTCAPTION and real clicks on the bell,
+  // search and mode switcher start a window drag instead. The patch clears
+  // the region on overlays that cannot receive pointer events, and must leave
+  // a genuine interactive drag handle alone.
+  // ---------------------------------------------------------------------
+  const drag = await page.evaluate(() => {
+    const phantom = document.getElementById('phantom');
+    const real = document.getElementById('realdrag');
+    const read = el => {
+      const cs = getComputedStyle(el);
+      return {
+        region: cs.webkitAppRegion || cs.getPropertyValue('-webkit-app-region') || '',
+        marked: el.classList.contains('rt-ai-nodrag')
+      };
+    };
+    return { supported: !!(getComputedStyle(document.body).webkitAppRegion !== undefined),
+             phantom: read(phantom), real: read(real) };
+  });
+
+  if (!drag.supported || drag.phantom.region === '') {
+    notes.push('-webkit-app-region not reported by this browser build; drag-region assertions limited to the class check');
+  }
+  check(drag.phantom.marked === true,
+    'the click-through drag overlay should be marked rt-ai-nodrag so the controls under it stay clickable');
+  check(drag.real.marked === false,
+    'a genuine interactive drag handle must NOT be marked rt-ai-nodrag - the window has to stay draggable');
+  if (drag.phantom.region !== '') {
+    check(drag.phantom.region === 'no-drag',
+      `the phantom overlay should end up no-drag, got ${drag.phantom.region}`);
+    check(drag.real.region === 'drag',
+      `the real drag handle should stay drag, got ${drag.real.region}`);
+  }
+
+  // ---------------------------------------------------------------------
   // 5. The stylesheet must be the weakest layer in the cascade, so that no
   //    app rule is ever overridden.
   // ---------------------------------------------------------------------

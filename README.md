@@ -33,7 +33,7 @@ without changing their original installation.
 פתחו **PowerShell** (לא חייב admin), הדביקו את השורה הזו, ולחצו Enter:
 
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/install-online.ps1 | iex
 ```
 
 זהו. בסוף יופיע קיצור דרך בשם **"ChatGPT"** על שולחן העבודה ובתפריט Start,
@@ -63,7 +63,7 @@ reports and pull requests are very welcome.
 פתחו **Terminal** והדביקו:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/install-online.sh | bash
 ```
 
 זה ייצור `~/Applications/ChatGPT-RT-AI.app` עם תמיכת RTL, מבלי לגעת
@@ -101,12 +101,12 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/insta
 
 **Windows:**
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/uninstall-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/uninstall-online.ps1 | iex
 ```
 
 **macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/uninstall-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/uninstall-online.sh | bash
 ```
 
 המקור (תחת `WindowsApps` ב-Windows, או `/Applications` ב-Mac)
@@ -126,7 +126,7 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/unins
 זה היה באג במשימת העדכון האוטומטי: היא הופעלה אחרי **כל** עדכון Microsoft Store
 ובחלון גלוי, במקום רק אחרי עדכון של האפליקציה. **תוקן.**
 
-לא צריך להסיר ולהתקין מחדש - התקנת v0.4.0 (השורה הרגילה למעלה) מחליפה את
+לא צריך להסיר ולהתקין מחדש - התקנת v0.5.0 (השורה הרגילה למעלה) מחליפה את
 המשימה הישנה במשימה החדשה והנקייה. לחלופין, לתיקון המשימה בלבד:
 
 ```powershell
@@ -134,6 +134,34 @@ irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/main/fix-autoupdate
 ```
 
 ---
+
+## v0.5.0 - שורת הכלים העליונה שלא הגיבה ללחיצות
+
+**זהו באג של האפליקציה עצמה, לא של הפאצ'** - הוא נמדד זהה בהתקנה נקייה
+מה-Store, בלי שום פאץ'. הפאצ' פשוט מתקן אותו בדרך.
+
+בבילד 26.831 האפליקציה פורשת מעל שורת הכלים כמה שכבות שנושאות גם
+`-webkit-app-region: drag` וגם `pointer-events: none`. Chromium בונה את
+אזור הגרירה של החלון מ-`-webkit-app-region` בלבד ו**מתעלם מ-`pointer-events`**,
+ולכן Windows מדווח על כל הרצועה כ-`HTCAPTION` - כלומר "פס כותרת".
+
+התוצאה: הפעמון, החיפוש ומחליף המצב Chat/Work/Codex יושבים בתוך הרצועה, ולחיצת
+עכבר אמיתית עליהם **גוררת את החלון** במקום להגיע אליהם. מדידה עם
+`WM_NCHITTEST` על אפליקציה מקורית לגמרי:
+
+```
+client y=10..20  -> HTCLIENT     שורת File/Edit/View - עובדת
+client y=30..85  -> HTCAPTION    <-- הפעמון, החיפוש ו-ChatGPT
+client y=90+     -> HTCLIENT     כל השאר עובד
+```
+
+**התיקון:** אלמנט שאינו יכול לקבל אירועי עכבר גם לא יכול לשמש ידית גרירה,
+אז הפאצ' מנקה את אזור הגרירה רק על שכבות שהוכח שהן `pointer-events: none`.
+ידית הגרירה האמיתית (שהיא interactive) נשארת - החלון עדיין נגרר משורת
+התפריטים. אם OpenAI יתקנו את זה, שום אלמנט לא יתאים והקוד הופך ל-no-op.
+
+אחרי התיקון, באותה מדידה: `y=44,60,76,90 -> HTCLIENT`, ושורת התפריטים
+נשארה `HTCAPTION`.
 
 ## v0.4.0 - תיקון כפתורים שלא הגיבו ועיצוב שבור
 
@@ -260,7 +288,7 @@ node .\tests\run-rtl-harness.mjs
   bail out with a clear error rather than patch the wrong file - report
   it as an issue and a new release will be cut.
 - **Trust model:** the one-line installer is pinned to a signed release
-  tag (currently `v0.4.0`), not the `main` branch. A compromised `main`
+  tag (currently `v0.5.0`), not the `main` branch. A compromised `main`
   cannot silently affect users who run the published one-liner. The repo
   is small and auditable - read the scripts before you run them.
 
@@ -314,12 +342,12 @@ migrated automatically.
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/install-online.ps1 | iex
 ```
 
 ```bash
 # macOS (Terminal) - untested on the unified app, contributions welcome
-curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/install-online.sh | bash
 ```
 
 **Notes:**
@@ -334,7 +362,7 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.4.0/insta
 
 **Installed an earlier version and see a CMD window pop up every few minutes?**
 That was an auto-update task bug (it fired on every Microsoft Store update, in a
-visible window). Fixed - installing v0.4.0 replaces the old task. To fix just
+visible window). Fixed - installing v0.5.0 replaces the old task. To fix just
 the task (one UAC prompt):
 
 ```powershell
