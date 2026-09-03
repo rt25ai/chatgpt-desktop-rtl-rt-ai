@@ -2,7 +2,7 @@
 RT-AI ChatGPT RTL Patch - Online installer
 Targets the unified ChatGPT desktop app ("Powered by Codex & OWL").
 Run via:
-  irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/main/install-online.ps1 | iex
+  irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/install-online.ps1 | iex
 
 Downloads the latest release as a zip, extracts to a temp folder, and runs
 patch.ps1 -Install. No admin required.
@@ -10,11 +10,11 @@ patch.ps1 -Install. No admin required.
 
 [CmdletBinding()]
 param(
-    [string] $Repo = "rt25ai/codex-rtl-rt-ai",
+    [string] $Repo = "rt25ai/chatgpt-desktop-rtl-rt-ai",
     # Pin to a release tag by default so a compromised main branch cannot
     # silently affect users running the published one-liner. Pass -Branch main
     # explicitly only if you intentionally want the bleeding edge.
-    [string] $Branch = "v0.5.0"
+    [string] $Branch = "v0.6.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,7 +33,7 @@ if (-not (Get-Command node.exe -ErrorAction SilentlyContinue)) {
     throw "Node.js is not installed. Install it from https://nodejs.org/ and rerun."
 }
 
-$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-rtl-rt-ai-" + [guid]::NewGuid().ToString("N"))
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("chatgpt-rtl-rt-ai-" + [guid]::NewGuid().ToString("N"))
 $zipPath = Join-Path $tempRoot "source.zip"
 $extractDir = Join-Path $tempRoot "extract"
 

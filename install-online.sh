@@ -4,17 +4,17 @@
 # Targets the unified ChatGPT desktop app ("Powered by Codex & OWL").
 #
 # Run via:
-#   curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/main/install-online.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/install-online.sh | bash
 #
 # Downloads the latest source as a zip, extracts to a temp folder, and runs
 # patch.sh --install. No admin / sudo required.
 # ============================================================================
 set -euo pipefail
 
-REPO="${RT_AI_CODEX_REPO:-rt25ai/codex-rtl-rt-ai}"
+REPO="${RT_AI_CODEX_REPO:-rt25ai/chatgpt-desktop-rtl-rt-ai}"
 # Pin to a release tag by default. Override with RT_AI_CODEX_BRANCH=main only
 # if you intentionally want the bleeding edge.
-BRANCH="${RT_AI_CODEX_BRANCH:-v0.5.0}"
+BRANCH="${RT_AI_CODEX_BRANCH:-v0.6.0}"
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -36,7 +36,7 @@ command -v node >/dev/null 2>&1 || die "Node.js is not installed. brew install n
 command -v codesign >/dev/null 2>&1 || die "Xcode CLI tools missing. Run: xcode-select --install"
 command -v unzip >/dev/null 2>&1 || die "unzip is required but not found."
 
-TMP_ROOT="$(mktemp -d -t rt-ai-codex-rtl-XXXXXX)"
+TMP_ROOT="$(mktemp -d -t rt-ai-chatgpt-rtl-XXXXXX)"
 trap 'rm -rf "$TMP_ROOT" 2>/dev/null || true' EXIT
 
 if [[ "$BRANCH" =~ ^v[0-9]+\. ]]; then

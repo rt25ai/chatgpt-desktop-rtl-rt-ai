@@ -1,4 +1,4 @@
-// Behavioural test for codex-rtl-payload.js.
+// Behavioural test for chatgpt-rtl-payload.js.
 //
 // tests/rtl-harness.html is a small stand-in for the ChatGPT desktop webview:
 // it reproduces the app's real Tailwind v4 `rtl:` variant selectors and its
@@ -26,7 +26,7 @@ const args = process.argv.slice(2);
 const payloadArg = args.includes('--payload') ? args[args.indexOf('--payload') + 1] : null;
 const payloadSrc = payloadArg
   ? path.resolve(payloadArg)
-  : path.join(REPO, 'codex-rtl-payload.js');
+  : path.join(REPO, 'chatgpt-rtl-payload.js');
 
 function loadPlaywright() {
   const require = createRequire(import.meta.url);

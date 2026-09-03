@@ -33,7 +33,7 @@ without changing their original installation.
 פתחו **PowerShell** (לא חייב admin), הדביקו את השורה הזו, ולחצו Enter:
 
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/install-online.ps1 | iex
 ```
 
 זהו. בסוף יופיע קיצור דרך בשם **"ChatGPT"** על שולחן העבודה ובתפריט Start,
@@ -63,7 +63,7 @@ reports and pull requests are very welcome.
 פתחו **Terminal** והדביקו:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/install-online.sh | bash
 ```
 
 זה ייצור `~/Applications/ChatGPT-RT-AI.app` עם תמיכת RTL, מבלי לגעת
@@ -75,7 +75,7 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/insta
 > ב-`/Applications` (מ-https://chatgpt.com/download).
 > שימו לב: **"ChatGPT Classic"** היא האפליקציה הישנה (Swift) - הפאצ' לא
 > מיועד לה ולא ייגע בה.
-> אם נתקלתם בבעיה - פתחו [issue](https://github.com/rt25ai/codex-rtl-rt-ai/issues) או PR.
+> אם נתקלתם בבעיה - פתחו [issue](https://github.com/rt25ai/chatgpt-desktop-rtl-rt-ai/issues) או PR.
 
 ## Before / After
 
@@ -101,12 +101,12 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/insta
 
 **Windows:**
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/uninstall-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/uninstall-online.ps1 | iex
 ```
 
 **macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/uninstall-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/uninstall-online.sh | bash
 ```
 
 המקור (תחת `WindowsApps` ב-Windows, או `/Applications` ב-Mac)
@@ -126,14 +126,35 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/unins
 זה היה באג במשימת העדכון האוטומטי: היא הופעלה אחרי **כל** עדכון Microsoft Store
 ובחלון גלוי, במקום רק אחרי עדכון של האפליקציה. **תוקן.**
 
-לא צריך להסיר ולהתקין מחדש - התקנת v0.5.0 (השורה הרגילה למעלה) מחליפה את
+לא צריך להסיר ולהתקין מחדש - התקנת v0.6.0 (השורה הרגילה למעלה) מחליפה את
 המשימה הישנה במשימה החדשה והנקייה. לחלופין, לתיקון המשימה בלבד:
 
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/main/fix-autoupdate-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/fix-autoupdate-online.ps1 | iex
 ```
 
 ---
+
+## v0.6.0 - שם חדש והתקנה נקייה
+
+**הריפו עבר שם:** `codex-rtl-rt-ai` → **`chatgpt-desktop-rtl-rt-ai`**. האפליקציה
+כבר לא נקראת Codex אלא ChatGPT Desktop, והשם משקף את זה. GitHub שומר הפניה
+מהשם הישן, כך ששורות התקנה ישנות ממשיכות לעבוד - אבל כדאי לעדכן לשורה החדשה.
+גם קובץ ה-payload שונה ל-`chatgpt-rtl-payload.js`.
+
+**ההתקנה עצמה נוקתה - היא מסיימת עכשיו בלי אף אזהרה:**
+
+- **מוזרק קובץ אחד במקום 12.** קודם הפאצ' נדחף לכל bundle שהתאים ל-glob
+  (`index-*.js`, `app-main-*.js`, `composer-*.js`). ה-payload ממילא מגן על
+  עצמו בדגל גלובלי, אז 11 מתוך 12 ההזרקות רק ניפחו את האפליקציה. עכשיו
+  המתקין קורא את ה-entry module מתוך `webview/index.html` ומזריק רק אליו.
+- **נעלמה האזהרה על ה-ASAR fuse.** ל-shell של ChatGPT (OWL) פשוט אין fuse
+  sentinel - זה תקין ולא בעיה, אז זו כבר לא אזהרה צהובה אלא שורת מידע.
+- **חלון ה-UAC כבר לא מפתיע ולא נכשל בשקט.** רישום משימת העדכון האוטומטי
+  דורש אישור מנהל אחד (כך Windows עובד - גם משימה למשתמש בלבד נחסמת).
+  עכשיו נכתב מראש שהחלון עומד לקפוץ, ואם מסרבים - זו הודעת מידע רגילה עם
+  הסבר מה זה אומר, לא שגיאה. הפאצ' עצמו מותקן ועובד בכל מקרה.
+- אם המשימה כבר קיימת מהתקנה קודמת, המתקין מזהה ומדווח על כך במקום להיכשל.
 
 ## v0.5.0 - שורת הכלים העליונה שלא הגיבה ללחיצות
 
@@ -208,7 +229,7 @@ logical properties (`padding-inline-*`, `margin-inline-*`, `inset-inline-*`).
    (זו חבילת ה-MSIX של ChatGPT המאוחדת - היא שמרה על מזהה Codex).
 2. מעתיק אותה ל-`%LOCALAPPDATA%\Programs\ChatGPT-RT-AI`.
 3. מחלץ את `resources\app.asar` עם `@electron/asar`.
-4. מוסיף את `codex-rtl-payload.js` כ-prefix ל-bundles של ה-webview:
+4. מוסיף את `chatgpt-rtl-payload.js` כ-prefix ל-bundles של ה-webview:
    - `webview\assets\index-*.js`, `app-main-*.js`, `composer-*.js`
 5. אורז מחדש את `app.asar`.
 6. מנסה לכבות את `EnableEmbeddedAsarIntegrityValidation` (best-effort:
@@ -226,7 +247,7 @@ logical properties (`padding-inline-*`, `margin-inline-*`, `inset-inline-*`).
 
 ```text
 .
-|-- codex-rtl-payload.js     # ה-JS שמוזרק ל-webview (משותף Win/Mac)
+|-- chatgpt-rtl-payload.js     # ה-JS שמוזרק ל-webview (משותף Win/Mac)
 |--
 |-- patch.ps1                # סקריפט ראשי - Windows
 |-- install.bat              # מתקין בדאבל-קליק - Windows
@@ -288,7 +309,7 @@ node .\tests\run-rtl-harness.mjs
   bail out with a clear error rather than patch the wrong file - report
   it as an issue and a new release will be cut.
 - **Trust model:** the one-line installer is pinned to a signed release
-  tag (currently `v0.5.0`), not the `main` branch. A compromised `main`
+  tag (currently `v0.6.0`), not the `main` branch. A compromised `main`
   cannot silently affect users who run the published one-liner. The repo
   is small and auditable - read the scripts before you run them.
 
@@ -342,12 +363,12 @@ migrated automatically.
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/install-online.ps1 | iex
 ```
 
 ```bash
 # macOS (Terminal) - untested on the unified app, contributions welcome
-curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/install-online.sh | bash
 ```
 
 **Notes:**
@@ -362,11 +383,11 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/v0.5.0/insta
 
 **Installed an earlier version and see a CMD window pop up every few minutes?**
 That was an auto-update task bug (it fired on every Microsoft Store update, in a
-visible window). Fixed - installing v0.5.0 replaces the old task. To fix just
+visible window). Fixed - installing v0.6.0 replaces the old task. To fix just
 the task (one UAC prompt):
 
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/main/fix-autoupdate-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/fix-autoupdate-online.ps1 | iex
 ```
 
 ## Known limitations

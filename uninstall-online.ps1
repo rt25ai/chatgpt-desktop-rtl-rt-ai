@@ -1,15 +1,15 @@
 <#
 RT-AI ChatGPT RTL Patch - Online uninstaller
 Run via:
-  irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/main/uninstall-online.ps1 | iex
+  irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/uninstall-online.ps1 | iex
 
 Downloads patch.ps1 and runs it with -Uninstall. No admin required.
 #>
 
 [CmdletBinding()]
 param(
-    [string] $Repo = "rt25ai/codex-rtl-rt-ai",
-    [string] $Branch = "v0.5.0"
+    [string] $Repo = "rt25ai/chatgpt-desktop-rtl-rt-ai",
+    [string] $Branch = "v0.6.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,7 +24,7 @@ Write-Host "  RT-AI ChatGPT RTL Patch - Online Uninstaller"
 Write-Host "  https://rt-ai.co.il"
 Write-Host "============================================================"
 
-$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-rtl-rt-ai-uninst-" + [guid]::NewGuid().ToString("N"))
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("chatgpt-rtl-rt-ai-uninst-" + [guid]::NewGuid().ToString("N"))
 $zipPath = Join-Path $tempRoot "source.zip"
 $extractDir = Join-Path $tempRoot "extract"
 

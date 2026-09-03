@@ -16,7 +16,7 @@
 # How it works:
 #   1. Copies the app to ~/Applications/ChatGPT-RT-AI.app (original untouched).
 #   2. Extracts the app.asar archive.
-#   3. Prepends codex-rtl-payload.js to the webview bundles.
+#   3. Prepends chatgpt-rtl-payload.js to the webview bundles.
 #   4. Repacks the archive.
 #   5. Best-effort disables the Electron ASAR integrity fuse on the copy
 #      (OWL-shell builds have no fuse sentinel; that is fine).
@@ -28,7 +28,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PAYLOAD_FILE="$SCRIPT_DIR/codex-rtl-payload.js"
+PAYLOAD_FILE="$SCRIPT_DIR/chatgpt-rtl-payload.js"
 
 # Default install / source paths. Override via env or flags.
 # CHATGPT_SOURCE_APP wins; CODEX_SOURCE_APP is honored for backwards compat.
@@ -193,8 +193,8 @@ deploy_patcher() {
         cp "$self" "$PATCHER_DIR/patch.sh" 2>/dev/null || true
         chmod +x "$PATCHER_DIR/patch.sh" 2>/dev/null || true
     fi
-    if [ -f "$PAYLOAD_FILE" ] && [ "$PAYLOAD_FILE" != "$PATCHER_DIR/codex-rtl-payload.js" ]; then
-        cp "$PAYLOAD_FILE" "$PATCHER_DIR/codex-rtl-payload.js" 2>/dev/null || true
+    if [ -f "$PAYLOAD_FILE" ] && [ "$PAYLOAD_FILE" != "$PATCHER_DIR/chatgpt-rtl-payload.js" ]; then
+        cp "$PAYLOAD_FILE" "$PATCHER_DIR/chatgpt-rtl-payload.js" 2>/dev/null || true
     fi
 }
 
@@ -355,7 +355,7 @@ install_patch() {
 
     resolve_source_app
     log "Source app: $SOURCE_APP (v$(app_version "$SOURCE_APP"))"
-    [ ! -f "$PAYLOAD_FILE" ] && die "codex-rtl-payload.js not found at $PAYLOAD_FILE. Re-clone the repository."
+    [ ! -f "$PAYLOAD_FILE" ] && die "chatgpt-rtl-payload.js not found at $PAYLOAD_FILE. Re-clone the repository."
 
     check_dependencies
     quit_patched_app

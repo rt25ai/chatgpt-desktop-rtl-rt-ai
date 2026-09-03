@@ -3,12 +3,12 @@
 # RT-AI ChatGPT RTL Patch - Online uninstaller for macOS
 #
 # Run via:
-#   curl -fsSL https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/main/uninstall-online.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/uninstall-online.sh | bash
 # ============================================================================
 set -euo pipefail
 
-REPO="${RT_AI_CODEX_REPO:-rt25ai/codex-rtl-rt-ai}"
-BRANCH="${RT_AI_CODEX_BRANCH:-v0.5.0}"
+REPO="${RT_AI_CODEX_REPO:-rt25ai/chatgpt-desktop-rtl-rt-ai}"
+BRANCH="${RT_AI_CODEX_BRANCH:-v0.6.0}"
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -28,7 +28,7 @@ printf "============================================================\n"
 
 command -v unzip >/dev/null 2>&1 || die "unzip is required but not found."
 
-TMP_ROOT="$(mktemp -d -t rt-ai-codex-rtl-uninst-XXXXXX)"
+TMP_ROOT="$(mktemp -d -t rt-ai-chatgpt-rtl-uninst-XXXXXX)"
 trap 'rm -rf "$TMP_ROOT" 2>/dev/null || true' EXIT
 
 if [[ "$BRANCH" =~ ^v[0-9]+\. ]]; then

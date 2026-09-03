@@ -16,7 +16,7 @@ ASCII-only on purpose: stays correct whether run via `irm ... | iex`, piped to
 powershell, or saved and run with -File on Windows PowerShell 5.1.
 
 Run via:
-  irm https://raw.githubusercontent.com/rt25ai/codex-rtl-rt-ai/main/fix-autoupdate-online.ps1 | iex
+  irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/fix-autoupdate-online.ps1 | iex
 #>
 
 $ErrorActionPreference = 'Stop'

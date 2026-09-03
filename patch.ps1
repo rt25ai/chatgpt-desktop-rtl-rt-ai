@@ -29,7 +29,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $Script:RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Script:PayloadPath = Join-Path $Script:RepoRoot "codex-rtl-payload.js"
+$Script:PayloadPath = Join-Path $Script:RepoRoot "chatgpt-rtl-payload.js"
 $Script:ShortcutName = "ChatGPT.lnk"
 $Script:LegacyShortcutNames = @("Codex.lnk", "Codex RT-AI.lnk", "Codex RTL.lnk")
 $Script:LegacyPatchedDirs = @("Codex-RTL", "Codex-RT-AI")
@@ -454,19 +454,38 @@ function Patch-Asar {
         Invoke-Checked $NpxPath @("--yes", "@electron/asar", "extract", $asarPath, $extractDir)
 
         Write-Step "Injecting RT-AI RTL payload"
-        $targetGlobs = @(
-            "webview\assets\index-*.js",
-            "webview\assets\app-main-*.js",
-            "webview\assets\composer-*.js"
-        )
+
+        # The payload guards itself with a global flag, so injecting it into
+        # every bundle that happens to match a glob only ever bloats the app and
+        # rewrites files we have no business touching. The webview has exactly
+        # one entry module and index.html names it, so read it from there and
+        # patch that single file.
         $targets = New-Object System.Collections.Generic.List[System.IO.FileInfo]
-        foreach ($glob in $targetGlobs) {
-            Get-ChildItem -Path (Join-Path $extractDir $glob) -File -ErrorAction SilentlyContinue |
-                ForEach-Object { $targets.Add($_) }
+        $indexHtml = Join-Path $extractDir "webview\index.html"
+        if (Test-Path -LiteralPath $indexHtml) {
+            $html = Get-Content -LiteralPath $indexHtml -Raw
+            foreach ($m in [regex]::Matches($html, '<script[^>]+src="\.?/?(?<src>[^"]+\.js)"')) {
+                $entry = Join-Path $extractDir ("webview\" + ($m.Groups["src"].Value -replace '^\./', '' -replace '/', '\'))
+                if (Test-Path -LiteralPath $entry) {
+                    $targets.Add((Get-Item -LiteralPath $entry))
+                }
+            }
+        }
+
+        if ($targets.Count -gt 0) {
+            Write-Info "Entry bundle from index.html: $($targets[0].Name)"
+        } else {
+            # index.html moved or changed shape: fall back to the historical
+            # globs rather than failing the install.
+            Write-Info "Could not read the entry from index.html; falling back to bundle globs."
+            foreach ($glob in @("webview\assets\index-*.js", "webview\assets\app-main-*.js")) {
+                Get-ChildItem -Path (Join-Path $extractDir $glob) -File -ErrorAction SilentlyContinue |
+                    ForEach-Object { $targets.Add($_) }
+            }
         }
 
         $uniqueTargets = $targets | Sort-Object FullName -Unique
-        if (-not $uniqueTargets -or $uniqueTargets.Count -eq 0) {
+        if (-not $uniqueTargets -or @($uniqueTargets).Count -eq 0) {
             throw "No webview JS bundles found. The app structure may have changed."
         }
 
@@ -549,7 +568,11 @@ function Disable-AsarIntegrityFuse {
     if ($fuseDisabled) {
         Write-Ok "ASAR integrity fuse disabled on the patched copy."
     } else {
-        Write-Warn "Could not flip the ASAR integrity fuse (OWL builds expose no fuse wire). Continuing - the build is not enforcing embedded asar integrity."
+        # Expected on every current build: the OWL shell launcher carries no
+        # Electron fuse sentinel, so there is nothing to flip and nothing is
+        # enforcing embedded asar integrity. This is normal, not a problem -
+        # keep it as an info line so a clean install prints no warnings.
+        Write-Info "No ASAR integrity fuse in this build (normal for the ChatGPT/OWL shell) - nothing to disable."
     }
 }
 
@@ -657,7 +680,7 @@ function Deploy-Patcher {
     $thisScript = $PSCommandPath
     if (-not $thisScript) { $thisScript = $MyInvocation.MyCommand.Path }
     $targetScript = Join-Path $Script:PatcherDir "patch.ps1"
-    $targetPayload = Join-Path $Script:PatcherDir "codex-rtl-payload.js"
+    $targetPayload = Join-Path $Script:PatcherDir "chatgpt-rtl-payload.js"
 
     if ($thisScript -and (Resolve-FullPath $thisScript) -ine (Resolve-FullPath $targetScript)) {
         Copy-Item -LiteralPath $thisScript -Destination $targetScript -Force
@@ -665,6 +688,13 @@ function Deploy-Patcher {
     if ((Test-Path -LiteralPath $Script:PayloadPath) -and
         (Resolve-FullPath $Script:PayloadPath) -ine (Resolve-FullPath $targetPayload)) {
         Copy-Item -LiteralPath $Script:PayloadPath -Destination $targetPayload -Force
+    }
+
+    # The payload used to be called codex-rtl-payload.js. Leaving the old file
+    # behind would have the deployed patcher silently keep using it.
+    $legacyPayload = Join-Path $Script:PatcherDir "codex-rtl-payload.js"
+    if (Test-Path -LiteralPath $legacyPayload) {
+        Remove-Item -LiteralPath $legacyPayload -Force -ErrorAction SilentlyContinue
     }
 
     return $targetScript
@@ -715,16 +745,27 @@ function Register-AutoUpdateTask {
     # both - not after every Microsoft Store package update.
     # Built with the ScheduledTasks cmdlets (valid objects, no hand-written XML
     # to mis-format).
+    # Subscribing to the AppXDeploymentServer log needs administrator rights,
+    # and asking a user for UAC in the middle of an install is a good way to
+    # end up with auto-update switched off. So the event trigger is only added
+    # when we are ALREADY elevated; everyone else gets logon + daily triggers,
+    # which register with no prompt at all and keep the patch current. Running
+    # the installer from an admin PowerShell additionally gets the instant
+    # (within a minute of the Store update) trigger.
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+
     $triggers = New-Object System.Collections.Generic.List[object]
-    try {
-        $cls = Get-CimClass -Namespace "ROOT\Microsoft\Windows\TaskScheduler" -ClassName MSFT_TaskEventTrigger -ErrorAction Stop
-        $evt = New-CimInstance -CimClass $cls -ClientOnly
-        $evt.Enabled = $true
-        $evt.Subscription = '<QueryList><Query Id="0" Path="Microsoft-Windows-AppXDeploymentServer/Operational"><Select Path="Microsoft-Windows-AppXDeploymentServer/Operational">*[System[EventID=400] and EventData[Data[@Name="PackageDisplayName"]="ChatGPT" or Data[@Name="PackageDisplayName"]="Codex"]]</Select></Query></QueryList>'
-        $evt.Delay = "PT1M"
-        $triggers.Add($evt)
-    } catch {
-        Write-Info "AppX event trigger unavailable; using logon + daily triggers."
+    if ($isAdmin) {
+        try {
+            $cls = Get-CimClass -Namespace "ROOT\Microsoft\Windows\TaskScheduler" -ClassName MSFT_TaskEventTrigger -ErrorAction Stop
+            $evt = New-CimInstance -CimClass $cls -ClientOnly
+            $evt.Enabled = $true
+            $evt.Subscription = '<QueryList><Query Id="0" Path="Microsoft-Windows-AppXDeploymentServer/Operational"><Select Path="Microsoft-Windows-AppXDeploymentServer/Operational">*[System[EventID=400] and EventData[Data[@Name="PackageDisplayName"]="ChatGPT" or Data[@Name="PackageDisplayName"]="Codex"]]</Select></Query></QueryList>'
+            $evt.Delay = "PT1M"
+            $triggers.Add($evt)
+        } catch {
+            Write-Info "AppX event trigger unavailable; using logon + daily triggers."
+        }
     }
     $triggers.Add((New-ScheduledTaskTrigger -AtLogOn))
     $triggers.Add((New-ScheduledTaskTrigger -Daily -At "12:00"))
@@ -737,29 +778,56 @@ function Register-AutoUpdateTask {
 
     try {
         Register-ScheduledTask -TaskName $Script:TaskName -Action $action -Trigger $triggers.ToArray() -Principal $principal -Settings $settings -Description "Re-applies the RT-AI ChatGPT RTL patch after Microsoft Store updates the app (https://rt-ai.co.il)." -Force | Out-Null
-        Write-Ok "Auto-update enabled. The patch will re-apply automatically when ChatGPT updates."
+        if ($isAdmin) {
+            Write-Ok "Auto-update enabled. The patch re-applies within a minute of a ChatGPT update."
+        } else {
+            Write-Ok "Auto-update enabled (checks at sign-in and daily)."
+        }
     } catch {
-        # Creating a scheduled task needs admin once. If we're not elevated,
-        # relaunch just this registration step elevated (single UAC prompt) so
-        # auto-update works even when the installer was run non-elevated.
-        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
-        if (-not $isAdmin -and -not $NoElevate) {
-            Write-Info "Task registration needs administrator rights once; requesting elevation..."
-            $pe = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
-            if (-not (Test-Path -LiteralPath $pe)) { $pe = "powershell.exe" }
-            try {
-                Start-Process $pe -ArgumentList @("-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "`"$patcherScript`"", "-RegisterTask", "-NoElevate") -Verb RunAs -Wait | Out-Null
-            } catch {
-                Write-Warn "Auto-update not enabled (elevation declined). Re-run the installer as administrator to enable it."
+        # Last resort: drop every trigger we might not be allowed to create and
+        # register the plainest possible task. Better a daily check than none.
+        try {
+            $basic = @((New-ScheduledTaskTrigger -AtLogOn), (New-ScheduledTaskTrigger -Daily -At "12:00"))
+            Register-ScheduledTask -TaskName $Script:TaskName -Action $action -Trigger $basic -Principal $principal -Settings $settings -Description "Re-applies the RT-AI ChatGPT RTL patch after Microsoft Store updates the app (https://rt-ai.co.il)." -Force | Out-Null
+            Write-Ok "Auto-update enabled (checks at sign-in and daily)."
+        } catch {
+            # A task registered from an elevated session cannot be overwritten
+            # by an unelevated one. That is not a failure: the existing task
+            # already points at the patcher directory we just refreshed, so it
+            # will pick up this version's payload on its next run.
+            $existing = $null
+            if (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) {
+                $existing = Get-ScheduledTask -TaskName $Script:TaskName -ErrorAction SilentlyContinue
+            }
+            if ($existing) {
+                Write-Ok "Auto-update already registered; kept the existing task (it now runs this version)."
                 return
             }
-            if ((Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) -and (Get-ScheduledTask -TaskName $Script:TaskName -ErrorAction SilentlyContinue)) {
-                Write-Ok "Auto-update enabled (registered with elevation)."
-            } else {
-                Write-Warn "Auto-update not enabled (elevation declined). Re-run the installer as administrator to enable it."
+
+            # Windows refuses task creation to a standard user on many machines,
+            # whatever the trigger. One elevation gets it done. Say so before
+            # the UAC dialog appears so it is not a surprise, and treat a
+            # decline as a normal outcome - the patch is already installed and
+            # working at this point.
+            if (-not $NoElevate) {
+                Write-Info "Windows needs one administrator approval to create the auto-update task."
+                Write-Info "A UAC prompt will appear now. Declining is fine - see the note below."
+                $pe = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
+                if (-not (Test-Path -LiteralPath $pe)) { $pe = "powershell.exe" }
+                try {
+                    Start-Process $pe -ArgumentList @("-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "`"$patcherScript`"", "-RegisterTask", "-NoElevate") -Verb RunAs -Wait | Out-Null
+                } catch {
+                    # Declined; fall through to the explanation below.
+                }
+                if ((Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) -and (Get-ScheduledTask -TaskName $Script:TaskName -ErrorAction SilentlyContinue)) {
+                    Write-Ok "Auto-update enabled."
+                    return
+                }
             }
-        } else {
-            Write-Warn "Could not register the auto-update task ($($_.Exception.Message)). The patch still works; re-run the installer after a ChatGPT update."
+
+            Write-Info "Auto-update is off (no administrator approval)."
+            Write-Info "Nothing is broken: your patched ChatGPT keeps working. When the Store"
+            Write-Info "updates ChatGPT, just run the install line again to re-apply the patch."
         }
     }
 }

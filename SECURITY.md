@@ -16,10 +16,10 @@ If you find a security issue, please report it **privately** so users are
 protected during triage:
 
 - Preferred: open a GitHub
-  [Security Advisory draft](https://github.com/rt25ai/codex-rtl-rt-ai/security/advisories/new)
+  [Security Advisory draft](https://github.com/rt25ai/chatgpt-desktop-rtl-rt-ai/security/advisories/new)
   on this repository.
 - Alternative: email `roi@rt-ai.co.il` with the subject line
-  `[security] codex-rtl-rt-ai`. Please include a clear reproduction, the
+  `[security] chatgpt-desktop-rtl-rt-ai`. Please include a clear reproduction, the
   affected version (release tag), and your suggested mitigation if any.
 
 I will acknowledge within 72 hours, work with you on a fix, and credit you

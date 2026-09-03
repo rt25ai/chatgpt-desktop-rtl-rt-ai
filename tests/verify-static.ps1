@@ -13,13 +13,13 @@ function Assert-True {
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $patcherPath = Join-Path $repoRoot "patch.ps1"
-$payloadPath = Join-Path $repoRoot "codex-rtl-payload.js"
+$payloadPath = Join-Path $repoRoot "chatgpt-rtl-payload.js"
 $readmePath = Join-Path $repoRoot "README.md"
 $installBat = Join-Path $repoRoot "install.bat"
 $uninstallBat = Join-Path $repoRoot "uninstall.bat"
 
 Assert-True (Test-Path -LiteralPath $patcherPath) "patch.ps1 is missing"
-Assert-True (Test-Path -LiteralPath $payloadPath) "codex-rtl-payload.js is missing"
+Assert-True (Test-Path -LiteralPath $payloadPath) "chatgpt-rtl-payload.js is missing"
 Assert-True (Test-Path -LiteralPath $readmePath) "README.md is missing"
 Assert-True (Test-Path -LiteralPath $installBat) "install.bat is missing"
 Assert-True (Test-Path -LiteralPath $uninstallBat) "uninstall.bat is missing"
@@ -141,7 +141,7 @@ Assert-True ($macP.Contains("/Applications/ChatGPT.app")) "macOS patcher should 
 Assert-True ($macP.Contains("/Applications/Codex.app")) "macOS patcher should fall back to the legacy Codex.app"
 Assert-True ($macP.Contains("Codex-RT-AI.app")) "macOS patcher should migrate away the legacy Codex-RT-AI.app copy"
 Assert-True ($macP.Contains("app.asar")) "macOS patcher should validate the Electron app by its app.asar (excludes ChatGPT Classic)"
-Assert-True ($macP.Contains("codex-rtl-payload.js")) "macOS patcher should reference the shared payload"
+Assert-True ($macP.Contains("chatgpt-rtl-payload.js")) "macOS patcher should reference the shared payload"
 Assert-True ($macP.Contains("EnableEmbeddedAsarIntegrityValidation=off")) "macOS patcher should best-effort disable the ASAR fuse"
 Assert-True ($macP.Contains("codesign --force --deep --sign -")) "macOS patcher should re-sign ad-hoc"
 Assert-True ($macP.Contains("RT-AI CODEX RTL PATCH START")) "macOS patcher should detect the RT-AI payload marker"
