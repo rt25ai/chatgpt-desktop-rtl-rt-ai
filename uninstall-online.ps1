@@ -9,7 +9,7 @@ Downloads patch.ps1 and runs it with -Uninstall. No admin required.
 [CmdletBinding()]
 param(
     [string] $Repo = "rt25ai/chatgpt-desktop-rtl-rt-ai",
-    [string] $Branch = "v0.6.0"
+    [string] $Branch = "v0.7.0"
 )
 
 $ErrorActionPreference = "Stop"

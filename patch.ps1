@@ -432,6 +432,84 @@ function Remove-LegacyPatchedDirs {
     }
 }
 
+function Get-AsarHeaderHash {
+    param([string] $AsarPath)
+
+    # An asar starts with a small Chromium Pickle prelude:
+    #   [u32 = 4][u32 pickle size][u32 string pickle size][u32 json length][json]
+    # Electron's integrity check hashes that JSON header, not the whole file.
+    $stream = [System.IO.File]::OpenRead($AsarPath)
+    try {
+        $pre = New-Object byte[] 16
+        if ($stream.Read($pre, 0, 16) -ne 16) { throw "Could not read the asar prelude: $AsarPath" }
+        $jsonLength = [BitConverter]::ToUInt32($pre, 12)
+        if ($jsonLength -le 0 -or $jsonLength -gt 64MB) { throw "Implausible asar header length ($jsonLength) in $AsarPath" }
+        $json = New-Object byte[] $jsonLength
+        $read = 0
+        while ($read -lt $jsonLength) {
+            $chunk = $stream.Read($json, $read, $jsonLength - $read)
+            if ($chunk -le 0) { break }
+            $read += $chunk
+        }
+        if ($read -ne $jsonLength) { throw "Truncated asar header in $AsarPath" }
+    } finally {
+        $stream.Dispose()
+    }
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return -join ($sha.ComputeHash($json) | ForEach-Object { $_.ToString("x2") })
+    } finally {
+        $sha.Dispose()
+    }
+}
+
+function Update-AsarIntegrityHash {
+    param(
+        [string] $AppDir,
+        [string] $OldHash,
+        [string] $NewHash
+    )
+
+    # Builds from 26.901 onwards enforce embedded asar integrity: the launcher
+    # carries the SHA-256 of the asar header and Electron aborts with
+    #   FATAL asar_util.cc  Integrity check failed for asar archive
+    # the moment the archive hashes differently. Repacking always changes that
+    # hash, so the copied launcher has to be told the new one. Older builds do
+    # not enforce it and simply do not contain the string, which is why this is
+    # a no-op there rather than a failure.
+    #
+    # The hash lives in the binary as a plain 64-character ASCII hex string, so
+    # this is a same-length in-place edit: no section is resized and no PE
+    # structure is touched.
+    if ($OldHash -eq $NewHash) { return }
+
+    Write-Step "Updating embedded ASAR integrity hash"
+
+    # Latin-1 round-trips every byte value 1:1, so the file survives the
+    # string conversion unchanged apart from the hash we replace.
+    $latin1 = [System.Text.Encoding]::GetEncoding(28591)
+    $patched = 0
+
+    foreach ($file in (Get-ChildItem -LiteralPath $AppDir -File -Filter "*.exe" -ErrorAction SilentlyContinue)) {
+        $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+        $text = $latin1.GetString($bytes)
+        if (-not $text.Contains($OldHash)) { continue }
+
+        $count = ([regex]::Matches($text, [regex]::Escape($OldHash))).Count
+        $text = $text.Replace($OldHash, $NewHash)
+        [System.IO.File]::WriteAllBytes($file.FullName, $latin1.GetBytes($text))
+        Write-Info "Rewrote $count integrity reference(s) in $($file.Name)"
+        $patched += 1
+    }
+
+    if ($patched -gt 0) {
+        Write-Ok "Embedded ASAR integrity hash updated - the patched copy will pass Electron's check."
+    } else {
+        Write-Info "This build does not embed an ASAR integrity hash; nothing to update."
+    }
+}
+
 function Patch-Asar {
     param(
         [string] $AppDir,
@@ -515,9 +593,14 @@ function Patch-Asar {
         }
 
         Write-Step "Repacking app.asar"
+        # Capture the pristine header hash BEFORE overwriting the archive - the
+        # launcher has this value baked in and refuses to boot without it.
+        $oldHeaderHash = Get-AsarHeaderHash $asarPath
         Invoke-Checked $NpxPath @("--yes", "@electron/asar", "pack", $extractDir, $newAsar)
         Copy-Item -LiteralPath $newAsar -Destination $asarPath -Force
         Write-Ok "Repacked app.asar"
+
+        Update-AsarIntegrityHash -AppDir $AppDir -OldHash $oldHeaderHash -NewHash (Get-AsarHeaderHash $asarPath)
     } finally {
         if (Test-Path -LiteralPath $tempRoot) {
             Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue

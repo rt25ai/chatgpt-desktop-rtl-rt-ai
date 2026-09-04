@@ -8,7 +8,7 @@
 set -euo pipefail
 
 REPO="${RT_AI_CODEX_REPO:-rt25ai/chatgpt-desktop-rtl-rt-ai}"
-BRANCH="${RT_AI_CODEX_BRANCH:-v0.6.0}"
+BRANCH="${RT_AI_CODEX_BRANCH:-v0.7.0}"
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'

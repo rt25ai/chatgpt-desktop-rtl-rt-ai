@@ -14,7 +14,7 @@ param(
     # Pin to a release tag by default so a compromised main branch cannot
     # silently affect users running the published one-liner. Pass -Branch main
     # explicitly only if you intentionally want the bleeding edge.
-    [string] $Branch = "v0.6.0"
+    [string] $Branch = "v0.7.0"
 )
 
 $ErrorActionPreference = "Stop"

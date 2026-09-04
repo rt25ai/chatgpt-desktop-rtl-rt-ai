@@ -54,6 +54,16 @@ Assert-True ($patcher.Contains('Get-AppxPackage -Name "OpenAI.Codex"')) "patcher
 Assert-True ($patcher.Contains("Test-IsPatchedCopy")) "patcher should detect and skip our own patched copies as source candidates"
 Assert-True ($patcher.Contains("MaxAttempts")) "Remove-DirectorySafe should retry on file-lock failures"
 
+# --- Embedded ASAR integrity (build 26.901 and later) -----------------------
+# Those builds bake the SHA-256 of the asar header into the launcher and abort
+# with "FATAL asar_util.cc Integrity check failed for asar archive" the moment
+# the archive hashes differently. Repacking always changes that hash, so the
+# patcher has to rewrite it or every install is a copy that cannot start.
+Assert-True ($patcher.Contains("Get-AsarHeaderHash")) "patcher must compute the asar header hash"
+Assert-True ($patcher.Contains("Update-AsarIntegrityHash")) "patcher must rewrite the embedded ASAR integrity hash after repacking"
+Assert-True ($patcher -match '\$oldHeaderHash\s*=\s*Get-AsarHeaderHash') "the pristine hash must be captured BEFORE the repacked archive overwrites it"
+Assert-True ($patcher.Contains("GetEncoding(28591)")) "the binary rewrite must use a byte-preserving encoding (Latin-1)"
+
 Assert-True ($payload.Contains("RT-AI CODEX RTL PATCH START")) "payload marker is missing (kept CODEX name for idempotent re-patching)"
 Assert-True ($payload.Contains("__RT_AI_CODEX_RTL_PATCH__")) "payload should be idempotent"
 Assert-True ($payload.Contains(".ProseMirror")) "payload should handle the composer ProseMirror input"

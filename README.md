@@ -33,7 +33,7 @@ without changing their original installation.
 פתחו **PowerShell** (לא חייב admin), הדביקו את השורה הזו, ולחצו Enter:
 
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/install-online.ps1 | iex
 ```
 
 זהו. בסוף יופיע קיצור דרך בשם **"ChatGPT"** על שולחן העבודה ובתפריט Start,
@@ -63,7 +63,7 @@ reports and pull requests are very welcome.
 פתחו **Terminal** והדביקו:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/install-online.sh | bash
 ```
 
 זה ייצור `~/Applications/ChatGPT-RT-AI.app` עם תמיכת RTL, מבלי לגעת
@@ -101,12 +101,12 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0
 
 **Windows:**
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/uninstall-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/uninstall-online.ps1 | iex
 ```
 
 **macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/uninstall-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/uninstall-online.sh | bash
 ```
 
 המקור (תחת `WindowsApps` ב-Windows, או `/Applications` ב-Mac)
@@ -126,7 +126,7 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0
 זה היה באג במשימת העדכון האוטומטי: היא הופעלה אחרי **כל** עדכון Microsoft Store
 ובחלון גלוי, במקום רק אחרי עדכון של האפליקציה. **תוקן.**
 
-לא צריך להסיר ולהתקין מחדש - התקנת v0.6.0 (השורה הרגילה למעלה) מחליפה את
+לא צריך להסיר ולהתקין מחדש - התקנת v0.7.0 (השורה הרגילה למעלה) מחליפה את
 המשימה הישנה במשימה החדשה והנקייה. לחלופין, לתיקון המשימה בלבד:
 
 ```powershell
@@ -134,6 +134,32 @@ irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/fix-
 ```
 
 ---
+
+## v0.7.0 - קריטי: האפליקציה לא נפתחה אחרי עדכון ל-26.901
+
+**אם התקנתם גרסה קודמת ואחרי עדכון של ChatGPT האפליקציה המפוצ'ת מפסיקה
+להיפתח - זה זה. הריצו את שורת ההתקנה שוב וזה נפתר.**
+
+מבילד **26.901.1978.0** האפליקציה אוכפת **ASAR integrity**: ה-launcher נושא
+בתוכו את ה-SHA-256 של ה-header של `app.asar`, ו-Electron מסרב לעלות אם הארכיון
+על הדיסק מגיע לגיבוב אחר:
+
+```
+FATAL asar_util.cc:143 Integrity check failed for asar archive
+  (5d404e81... vs 930e4a7a...)
+```
+
+כל פאץ' מחייב אריזה מחדש של `app.asar`, ואריזה מחדש תמיד משנה את הגיבוב - אז
+העותק המפוצ' פשוט מת בהפעלה. בבילדים הקודמים האכיפה הזו לא הייתה קיימת, ולכן
+הפאצ' עבד עד עכשיו.
+
+**התיקון:** אחרי האריזה מחדש, המתקין מחשב את הגיבוב החדש של ה-header ומעדכן
+אותו בתוך ה-launcher. הגיבוב שמור שם כמחרוזת hex רגילה באורך 64 תווים, אז זו
+החלפה באותו אורך בדיוק - שום section לא זז ומבנה ה-PE לא משתנה. בבילד ישן
+שלא מכיל את המחרוזת, השלב פשוט מדווח שאין מה לעדכן.
+
+> **למה `@electron/fuses` לא פתר את זה:** ל-shell של ChatGPT אין fuse sentinel
+> בכלל, אז אי אפשר לכבות את האכיפה - צריך לספק את הגיבוב הנכון.
 
 ## v0.6.0 - שם חדש והתקנה נקייה
 
@@ -300,6 +326,12 @@ node .\tests\run-rtl-harness.mjs
   of order. Fixing that would mean overriding the direction of app
   chrome, which is exactly what broke v0.3.0, so the patch deliberately
   does not touch it.
+- **macOS may need the same integrity fix, untested.** On Windows the
+  launcher embeds the asar header hash and `patch.ps1` rewrites it (see
+  v0.7.0 above). macOS stores the equivalent under `ElectronAsarIntegrity`
+  in `Info.plist`, and `patch.sh` does not yet update it. If a patched
+  `ChatGPT-RT-AI.app` refuses to launch after an app update, that is the
+  likely cause - please open an issue.
 - **macOS support is experimental** - the script follows a standard
   Electron-patching pattern, but the author has not personally tested it
   on the unified app.
@@ -309,7 +341,7 @@ node .\tests\run-rtl-harness.mjs
   bail out with a clear error rather than patch the wrong file - report
   it as an issue and a new release will be cut.
 - **Trust model:** the one-line installer is pinned to a signed release
-  tag (currently `v0.6.0`), not the `main` branch. A compromised `main`
+  tag (currently `v0.7.0`), not the `main` branch. A compromised `main`
   cannot silently affect users who run the published one-liner. The repo
   is small and auditable - read the scripts before you run them.
 
@@ -363,12 +395,12 @@ migrated automatically.
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/install-online.ps1 | iex
 ```
 
 ```bash
 # macOS (Terminal) - untested on the unified app, contributions welcome
-curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.6.0/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/install-online.sh | bash
 ```
 
 **Notes:**
@@ -383,7 +415,7 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0
 
 **Installed an earlier version and see a CMD window pop up every few minutes?**
 That was an auto-update task bug (it fired on every Microsoft Store update, in a
-visible window). Fixed - installing v0.6.0 replaces the old task. To fix just
+visible window). Fixed - installing v0.7.0 replaces the old task. To fix just
 the task (one UAC prompt):
 
 ```powershell
