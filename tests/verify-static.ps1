@@ -72,6 +72,15 @@ Assert-True ($patcher.Contains("Update-AsarIntegrityHash")) "patcher must rewrit
 Assert-True ($patcher -match '\$oldHeaderHash\s*=\s*Get-AsarHeaderHash') "the pristine hash must be captured BEFORE the repacked archive overwrites it"
 Assert-True ($patcher.Contains("GetEncoding(28591)")) "the binary rewrite must use a byte-preserving encoding (Latin-1)"
 
+# --- App-contained core (build 26.917 and later) ----------------------------
+# "codexWindowsAppContainedCore": "1" makes the bootstrap demand the MSIX
+# package identity at launch; the unpackaged copy has none and dies with
+# "The process has no package identity." The patcher must switch it off, and
+# write package.json without a BOM (Windows PowerShell 5.1 runs the task).
+Assert-True ($patcher.Contains("Disable-AppContainedCore `$extractDir")) "Patch-Asar must switch off the app-contained core before repacking"
+Assert-True ($patcher.Contains('"codexWindowsAppContainedCore"')) "patcher must target the codexWindowsAppContainedCore flag"
+Assert-True ($patcher.Contains('UTF8Encoding($false)')) "package.json must be rewritten without a BOM"
+
 Assert-True ($payload.Contains("RT-AI CODEX RTL PATCH START")) "payload marker is missing (kept CODEX name for idempotent re-patching)"
 Assert-True ($payload.Contains("__RT_AI_CODEX_RTL_PATCH__")) "payload should be idempotent"
 Assert-True ($payload.Contains(".ProseMirror")) "payload should handle the composer ProseMirror input"

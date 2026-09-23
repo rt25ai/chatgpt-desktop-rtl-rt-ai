@@ -33,7 +33,7 @@ without changing their original installation.
 פתחו **PowerShell** (לא חייב admin), הדביקו את השורה הזו, ולחצו Enter:
 
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.2/install-online.ps1 | iex
 ```
 
 זהו. בסוף יופיע קיצור דרך בשם **"ChatGPT"** על שולחן העבודה ובתפריט Start,
@@ -63,7 +63,7 @@ reports and pull requests are very welcome.
 פתחו **Terminal** והדביקו:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.2/install-online.sh | bash
 ```
 
 זה ייצור `~/Applications/ChatGPT-RT-AI.app` עם תמיכת RTL, מבלי לגעת
@@ -101,12 +101,12 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0
 
 **Windows:**
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/uninstall-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.2/uninstall-online.ps1 | iex
 ```
 
 **macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/uninstall-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.2/uninstall-online.sh | bash
 ```
 
 המקור (תחת `WindowsApps` ב-Windows, או `/Applications` ב-Mac)
@@ -134,7 +134,7 @@ Microsoft Store, ודורש שהאפליקציה תרוץ מתוך החבילה 
 זה היה באג במשימת העדכון האוטומטי: היא הופעלה אחרי **כל** עדכון Microsoft Store
 ובחלון גלוי, במקום רק אחרי עדכון של האפליקציה. **תוקן.**
 
-לא צריך להסיר ולהתקין מחדש - התקנת v0.7.1 (השורה הרגילה למעלה) מחליפה את
+לא צריך להסיר ולהתקין מחדש - התקנת v0.7.2 (השורה הרגילה למעלה) מחליפה את
 המשימה הישנה במשימה החדשה והנקייה. לחלופין, לתיקון המשימה בלבד:
 
 ```powershell
@@ -142,6 +142,21 @@ irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/fix-
 ```
 
 ---
+
+## v0.7.2 - קריטי: "ChatGPT failed to start. The process has no package identity"
+
+**אם ChatGPT המתוקן מפסיק להיפתח עם ההודעה הזו - הריצו את שורת ההתקנה שוב וזה
+נפתר.**
+
+מבילד **26.917** האפליקציה מגיעה עם דגל חדש, `codexWindowsAppContainedCore`,
+שמריץ את הליבה בבידוד בתוך חבילת ה-Store. כשהדגל פעיל, האפליקציה מבקשת כבר
+בהפעלה את זהות חבילת ה-MSIX שלה. לעותק המתוקן, שרץ מחוץ לחבילה, אין זהות כזו,
+ולכן הוא נסגר מיד עם השגיאה. משימת העדכון האוטומטי בונה את העותק מחדש אחרי כל
+עדכון של ה-Store, כך שזה פגע גם במי שלא עשה כלום.
+
+**התיקון:** המתקין מכבה את הדגל בעותק, והאפליקציה חוזרת להריץ את הליבה שמגיעה
+איתה, כמו בכל הבילדים שלפני 26.917. הדגל נקרא במקום אחד בלבד, בקוד ההפעלה.
+נבדק על 26.917: העותק עולה, מתחבר לחשבון ומריץ את הליבה המצורפת.
 
 ## v0.7.1 - משימת העדכון האוטומטי לא נרשמה בלי הרשאות מנהל
 
@@ -366,6 +381,11 @@ node .\tests\run-rtl-harness.mjs
   on the unified app.
 - **The patched copy is not officially signed.** It carries an ad-hoc
   signature on macOS, and on Windows it is no longer MSIX-signed.
+- **The copy runs the bundled codex core, not the app-contained one.** From
+  build 26.917 the Store app can run its core app-contained, which requires
+  the MSIX package identity; the patched copy has none and would not start
+  (see v0.7.2 above). The patcher switches `codexWindowsAppContainedCore` off
+  in the copy, which is how every build before 26.917 ran.
 - **"Check for updates" inside the patched copy always says "Updates
   Unavailable" on Windows** ("updater initialization failed"). The app's
   Windows updater works through the Microsoft Store and needs the MSIX
@@ -376,7 +396,7 @@ node .\tests\run-rtl-harness.mjs
   bail out with a clear error rather than patch the wrong file - report
   it as an issue and a new release will be cut.
 - **Trust model:** the one-line installer is pinned to a signed release
-  tag (currently `v0.7.1`), not the `main` branch. A compromised `main`
+  tag (currently `v0.7.2`), not the `main` branch. A compromised `main`
   cannot silently affect users who run the published one-liner. The repo
   is small and auditable - read the scripts before you run them.
 
@@ -430,12 +450,12 @@ migrated automatically.
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.2/install-online.ps1 | iex
 ```
 
 ```bash
 # macOS (Terminal) - untested on the unified app, contributions welcome
-curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.2/install-online.sh | bash
 ```
 
 **Notes:**
@@ -450,7 +470,7 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0
 
 **Installed an earlier version and see a CMD window pop up every few minutes?**
 That was an auto-update task bug (it fired on every Microsoft Store update, in a
-visible window). Fixed - installing v0.7.1 replaces the old task. To fix just
+visible window). Fixed - installing v0.7.2 replaces the old task. To fix just
 the task (one UAC prompt):
 
 ```powershell

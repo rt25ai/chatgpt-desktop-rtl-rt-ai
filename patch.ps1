@@ -510,6 +510,34 @@ function Update-AsarIntegrityHash {
     }
 }
 
+function Disable-AppContainedCore {
+    param([string] $ExtractDir)
+
+    # Build 26.917 ships "codexWindowsAppContainedCore": "1". With it on, the
+    # bootstrap asks the native addon for the current MSIX package family
+    # before the main app loads, and a copy outside the package has none, so
+    # the app dies at launch with "ChatGPT failed to start. The process has no
+    # package identity." (HRESULT 0x80073D54). The flag is read in exactly one
+    # place, the bootstrap's startup gate; with it off the app runs the codex
+    # core bundled in resources\, as every build before 26.917 did.
+    # Plain text edit written without a BOM - Windows PowerShell 5.1 (which
+    # runs the auto-update task) would add one with Set-Content -Encoding UTF8.
+    $packageJson = Join-Path $ExtractDir "package.json"
+    if (-not (Test-Path -LiteralPath $packageJson)) {
+        throw "package.json not found in app.asar. The app structure may have changed."
+    }
+
+    $text = [System.IO.File]::ReadAllText($packageJson)
+    $pattern = '("codexWindowsAppContainedCore"\s*:\s*)"1"'
+    if ($text -match $pattern) {
+        $text = [regex]::Replace($text, $pattern, '${1}"0"')
+        [System.IO.File]::WriteAllText($packageJson, $text, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Ok "Switched off the app-contained core (it requires the Store package identity)."
+    } else {
+        Write-Info "This build does not use the app-contained core; nothing to switch off."
+    }
+}
+
 function Patch-Asar {
     param(
         [string] $AppDir,
@@ -591,6 +619,9 @@ function Patch-Asar {
         if ($skipped -gt 0) {
             Write-Info "Skipped $skipped already-patched file(s)."
         }
+
+        Write-Step "Making the copy launchable outside the Store package"
+        Disable-AppContainedCore $extractDir
 
         Write-Step "Repacking app.asar"
         # Capture the pristine header hash BEFORE overwriting the archive - the
