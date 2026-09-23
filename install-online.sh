@@ -14,7 +14,7 @@ set -euo pipefail
 REPO="${RT_AI_CODEX_REPO:-rt25ai/chatgpt-desktop-rtl-rt-ai}"
 # Pin to a release tag by default. Override with RT_AI_CODEX_BRANCH=main only
 # if you intentionally want the bleeding edge.
-BRANCH="${RT_AI_CODEX_BRANCH:-v0.7.0}"
+BRANCH="${RT_AI_CODEX_BRANCH:-v0.7.1}"
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'

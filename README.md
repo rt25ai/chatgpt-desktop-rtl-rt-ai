@@ -33,7 +33,7 @@ without changing their original installation.
 פתחו **PowerShell** (לא חייב admin), הדביקו את השורה הזו, ולחצו Enter:
 
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/install-online.ps1 | iex
 ```
 
 זהו. בסוף יופיע קיצור דרך בשם **"ChatGPT"** על שולחן העבודה ובתפריט Start,
@@ -63,7 +63,7 @@ reports and pull requests are very welcome.
 פתחו **Terminal** והדביקו:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/install-online.sh | bash
 ```
 
 זה ייצור `~/Applications/ChatGPT-RT-AI.app` עם תמיכת RTL, מבלי לגעת
@@ -101,12 +101,12 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0
 
 **Windows:**
 ```powershell
-irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/uninstall-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/uninstall-online.ps1 | iex
 ```
 
 **macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/uninstall-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/uninstall-online.sh | bash
 ```
 
 המקור (תחת `WindowsApps` ב-Windows, או `/Applications` ב-Mac)
@@ -120,13 +120,21 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0
 מוסתר, בלי לגעת בסשן פתוח. אין צורך להריץ שוב את המתקין; אם בכל זאת משהו
 נתקע, הרצה חוזרת של שורת ההתקנה תמיד מיישרת את המצב.
 
+**ההודעה "Updates Unavailable" בתוך האפליקציה צפויה.** בעותק המתוקן, "בדיקת
+עדכונים" מציגה "Automatic updates are unavailable right now" עם
+"updater initialization failed". מנגנון העדכון של ChatGPT ב-Windows עובד רק דרך
+Microsoft Store, ודורש שהאפליקציה תרוץ מתוך החבילה המקורית שלה. העותק רץ מחוץ
+לחבילה, ולכן המנגנון לא עולה. זה לא אומר שהעותק לא מתעדכן: ה-Store מעדכן את
+המקור, והמשימה בונה מחדש את העותק כש-ChatGPT סגור. כדי לבדוק מאיזו גרסה העותק
+נבנה ואם המשימה רשומה, מריצים את `status.bat`.
+
 ## תוקן: חלון CMD שקופץ (למי שהתקין גרסה קודמת)
 
 אם התקנת **גרסה קודמת** והבחנת בחלון שחור (CMD/PowerShell) שקופץ כל כמה דקות -
 זה היה באג במשימת העדכון האוטומטי: היא הופעלה אחרי **כל** עדכון Microsoft Store
 ובחלון גלוי, במקום רק אחרי עדכון של האפליקציה. **תוקן.**
 
-לא צריך להסיר ולהתקין מחדש - התקנת v0.7.0 (השורה הרגילה למעלה) מחליפה את
+לא צריך להסיר ולהתקין מחדש - התקנת v0.7.1 (השורה הרגילה למעלה) מחליפה את
 המשימה הישנה במשימה החדשה והנקייה. לחלופין, לתיקון המשימה בלבד:
 
 ```powershell
@@ -134,6 +142,27 @@ irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/fix-
 ```
 
 ---
+
+## v0.7.1 - משימת העדכון האוטומטי לא נרשמה בלי הרשאות מנהל
+
+**אם העותק המתוקן נשאר על גרסה ישנה, והרצתם בעבר את ההתקנה בלי לאשר את חלון
+ה-UAC - הריצו את שורת ההתקנה שוב.**
+
+אצל משתמש בלי הרשאות מנהל, רישום משימת העדכון האוטומטי נכשל עם
+"Access is denied". הסיבה: טריגר הכניסה נרשם כ"כניסה של כל משתמש", ו-Windows
+מאפשר רק למנהל לרשום טריגר כזה. גם הניסיון החלופי כלל את אותו טריגר ונכשל באותה
+צורה. מי שלא אישר את חלון ה-UAC נשאר בלי משימה בכלל, והעותק הפסיק להתעדכן אחרי
+עדכונים של ה-Store.
+
+**התיקון:** טריגר הכניסה מוגבל עכשיו למשתמש הנוכחי. כך הוא נרשם בלי הרשאות מנהל
+ובלי חלון UAC, בדיוק כמו הטריגר היומי. חלון ה-UAC נשאר רק למקרה ש-Windows חוסם
+גם את זה.
+
+> **תיקון למה שנכתב ב-v0.6.0:** לא כל משימה למשתמש בודד נחסמת. רק טריגר של
+> "כניסה של כל משתמש" דורש הרשאות מנהל.
+
+בנוסף, `status.bat` מציג עכשיו מאיזו גרסה העותק נבנה, ומזהיר כשהוא מפגר אחרי
+הגרסה שב-Store.
 
 ## v0.7.0 - קריטי: האפליקציה לא נפתחה אחרי עדכון ל-26.901
 
@@ -337,11 +366,17 @@ node .\tests\run-rtl-harness.mjs
   on the unified app.
 - **The patched copy is not officially signed.** It carries an ad-hoc
   signature on macOS, and on Windows it is no longer MSIX-signed.
+- **"Check for updates" inside the patched copy always says "Updates
+  Unavailable" on Windows** ("updater initialization failed"). The app's
+  Windows updater works through the Microsoft Store and needs the MSIX
+  package identity, which a copy outside the package does not have. Updates
+  still arrive: the Store updates the original and the auto-update task
+  rebuilds the copy. `status.bat` shows whether the copy is behind.
 - **Future UI changes** may move bundle filenames. The script will
   bail out with a clear error rather than patch the wrong file - report
   it as an issue and a new release will be cut.
 - **Trust model:** the one-line installer is pinned to a signed release
-  tag (currently `v0.7.0`), not the `main` branch. A compromised `main`
+  tag (currently `v0.7.1`), not the `main` branch. A compromised `main`
   cannot silently affect users who run the published one-liner. The repo
   is small and auditable - read the scripts before you run them.
 
@@ -395,12 +430,12 @@ migrated automatically.
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/install-online.ps1 | iex
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/install-online.ps1 | iex
 ```
 
 ```bash
 # macOS (Terminal) - untested on the unified app, contributions welcome
-curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.0/install-online.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.1/install-online.sh | bash
 ```
 
 **Notes:**
@@ -415,7 +450,7 @@ curl -fsSL https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0
 
 **Installed an earlier version and see a CMD window pop up every few minutes?**
 That was an auto-update task bug (it fired on every Microsoft Store update, in a
-visible window). Fixed - installing v0.7.0 replaces the old task. To fix just
+visible window). Fixed - installing v0.7.1 replaces the old task. To fix just
 the task (one UAC prompt):
 
 ```powershell
@@ -426,4 +461,7 @@ irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/main/fix-
 
 - macOS support is experimental.
 - The patched copy is not an officially signed OpenAI app.
+- On Windows, the in-app "Check for updates" shows "Updates Unavailable" in
+  the patched copy. That is expected: updates come through the Store and the
+  auto-update task.
 - Future UI changes may require an update to this patch.

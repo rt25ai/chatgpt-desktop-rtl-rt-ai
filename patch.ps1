@@ -835,6 +835,13 @@ function Register-AutoUpdateTask {
     # which register with no prompt at all and keep the patch current. Running
     # the installer from an admin PowerShell additionally gets the instant
     # (within a minute of the Store update) trigger.
+    # The logon trigger MUST name the user. A bare -AtLogOn means "at log on
+    # of any user", which Windows only lets an administrator register - so for
+    # a standard user the whole registration failed with "Access is denied",
+    # the fallback below failed the same way, and a declined UAC prompt left
+    # the machine with no auto-update at all. Scoped to the current user it
+    # registers unelevated, like the daily trigger.
+    $taskUser = "$env:USERDOMAIN\$env:USERNAME"
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
 
     $triggers = New-Object System.Collections.Generic.List[object]
@@ -850,13 +857,13 @@ function Register-AutoUpdateTask {
             Write-Info "AppX event trigger unavailable; using logon + daily triggers."
         }
     }
-    $triggers.Add((New-ScheduledTaskTrigger -AtLogOn))
+    $triggers.Add((New-ScheduledTaskTrigger -AtLogOn -User $taskUser))
     $triggers.Add((New-ScheduledTaskTrigger -Daily -At "12:00"))
 
     # RunLevel Limited: registers and runs as the current user without elevation
     # or a UAC prompt. The app copy is read via Get-AppxPackage's user-readable
     # InstallLocation, so the unelevated re-patch works.
-    $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+    $principal = New-ScheduledTaskPrincipal -UserId $taskUser -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
 
     try {
@@ -870,7 +877,7 @@ function Register-AutoUpdateTask {
         # Last resort: drop every trigger we might not be allowed to create and
         # register the plainest possible task. Better a daily check than none.
         try {
-            $basic = @((New-ScheduledTaskTrigger -AtLogOn), (New-ScheduledTaskTrigger -Daily -At "12:00"))
+            $basic = @((New-ScheduledTaskTrigger -AtLogOn -User $taskUser), (New-ScheduledTaskTrigger -Daily -At "12:00"))
             Register-ScheduledTask -TaskName $Script:TaskName -Action $action -Trigger $basic -Principal $principal -Settings $settings -Description "Re-applies the RT-AI ChatGPT RTL patch after Microsoft Store updates the app (https://rt-ai.co.il)." -Force | Out-Null
             Write-Ok "Auto-update enabled (checks at sign-in and daily)."
         } catch {
@@ -1057,22 +1064,36 @@ function Show-Status {
     Write-Host "RT-AI ChatGPT RTL Patch - Status" -ForegroundColor Cyan
     Write-Host ""
 
+    $sourceVersion = $null
     try {
         $source = Find-ChatGptAppDir $SourceAppDir
+        $sourceVersion = Get-ChatGptPackageVersion $source
         Write-Ok "Source ChatGPT app: $source"
-        Write-Info "Source package version: $(Get-ChatGptPackageVersion $source)"
+        Write-Info "Source package version: $sourceVersion"
     } catch {
         Write-Warn $_.Exception.Message
     }
 
     if (Test-Path -LiteralPath $destination) {
         Write-Ok "Patched copy: $destination"
-        $markerFound = $false
+        $markerPath = $null
         foreach ($name in @("rt-ai-chatgpt-rtl-patch.json", "rt-ai-codex-rtl-patch.json")) {
-            if (Test-Path -LiteralPath (Join-Path $destination "resources\$name")) { $markerFound = $true; break }
+            $candidate = Join-Path $destination "resources\$name"
+            if (Test-Path -LiteralPath $candidate) { $markerPath = $candidate; break }
         }
-        if ($markerFound) {
+        if ($markerPath) {
             Write-Ok "Patch marker found."
+            # The in-app "Check for updates" cannot work in the copy (the
+            # Windows updater needs the MSIX package identity), so this line
+            # is the only place a user can see that the copy fell behind.
+            $patchedVersion = $null
+            try { $patchedVersion = [version] (Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json).sourceVersion } catch { $patchedVersion = $null }
+            if ($patchedVersion) {
+                Write-Info "Patched copy built from version: $patchedVersion"
+                if ($sourceVersion -and $patchedVersion -lt $sourceVersion) {
+                    Write-Warn "The patched copy is behind the Store app ($patchedVersion < $sourceVersion). The auto-update task re-patches it while ChatGPT is closed, or run the installer again now."
+                }
+            }
         } else {
             Write-Warn "Patch marker missing; this directory may not be managed by this patcher."
         }

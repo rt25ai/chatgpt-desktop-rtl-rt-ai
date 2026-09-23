@@ -45,6 +45,14 @@ Assert-True ($patcher.Contains('"Codex.lnk"')) "patcher should clean up the lega
 Assert-True ($patcher.Contains('"Codex-RT-AI"')) "patcher should clean up the legacy Codex-RT-AI patched dir"
 Assert-True ($patcher.Contains("Codex RT-AI RTL Auto-Update")) "patcher should unregister the legacy auto-update task"
 Assert-True ($patcher.Contains('PackageDisplayName"]="ChatGPT"')) "auto-update event trigger should match the ChatGPT display name"
+# A bare -AtLogOn is "at log on of ANY user", which only an administrator may
+# register. It made the unelevated registration fail with "Access is denied",
+# so users who declined UAC ended up with no auto-update task at all.
+$logonTriggers = [regex]::Matches($patcher, 'New-ScheduledTaskTrigger -AtLogOn[^)\r\n]*')
+Assert-True ($logonTriggers.Count -ge 1) "auto-update task should have a logon trigger"
+foreach ($t in $logonTriggers) {
+    Assert-True ($t.Value -match '-User ') "logon trigger must be scoped to the current user (-User), or a standard user cannot register it: $($t.Value)"
+}
 Assert-True ($patcher.Contains("rt-ai-chatgpt-rtl-patch.json")) "patcher should write the rt-ai-chatgpt-rtl-patch.json marker"
 Assert-True ($patcher.Contains("rt-ai-codex-rtl-patch.json")) "patcher should still recognize the legacy marker for migration"
 Assert-True ($patcher.Contains("Get-StartMenuShortcutPath")) "patcher should also create a Start Menu shortcut"
