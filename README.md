@@ -26,6 +26,102 @@ without changing their original installation.
 מיועד למשתמשי עברית וערבית שעובדים עם אפליקציית ChatGPT Desktop החדשה
 ורוצים כתיבה טבעית מימין לשמאל בתוך האפליקציה, בלי לשנות את ההתקנה המקורית.
 
+## Windows installation guide (English)
+
+These steps are for the unified ChatGPT desktop app with Chat, Work, and
+Codex, installed from the Microsoft Store (package `OpenAI.Codex`).
+**ChatGPT Classic is not supported.**
+
+The installer creates a patched copy under
+`%LOCALAPPDATA%\Programs\ChatGPT-RT-AI`. Your original Microsoft Store
+installation remains unchanged. This is a community patch, not an official
+OpenAI release; read [the installer](install-online.ps1) and
+[the patcher](patch.ps1) before running them.
+
+### 1. Save your work and close ChatGPT
+
+Copy any unfinished message somewhere safe, then quit ChatGPT completely.
+
+### 2. Install Node.js LTS
+
+If Node.js is not already installed, download the Windows installer from
+[the official Node.js website](https://nodejs.org/en/download) and install
+the LTS version using the default options, including npm.
+
+### 3. Open PowerShell
+
+Open the Windows Start menu, search for **PowerShell**, and open it normally.
+Administrator mode is normally not required.
+
+### 4. Check Node.js and npm
+
+Run these commands:
+
+```powershell
+node --version
+npm.cmd --version
+```
+
+Both commands should display version numbers. If either command is not
+recognized, install Node.js and then close and reopen PowerShell so it
+picks up the updated PATH.
+
+### 5. Run the installer
+
+Copy the entire line below into PowerShell and press **Enter**:
+
+```powershell
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.2/install-online.ps1 | iex
+```
+
+This command downloads and executes the community installer from the pinned
+`v0.7.2` release. It downloads the project, copies and patches ChatGPT,
+creates shortcuts, and attempts to register the automatic update task.
+
+Wait for the installer to finish; do not close PowerShell while it is
+working. Successful installation ends with
+`RT-AI ChatGPT RTL patch installed.` and normally launches the patched app.
+
+If Windows Security blocks a file or command, stop and inspect the exact
+alert before continuing. Do not assume every alert is a false positive or
+disable security protection.
+
+### 6. Open the patched app and check RTL
+
+For future launches, use the newly created **ChatGPT** shortcut on the
+desktop or in the Start menu. If you have multiple shortcuts with the same
+name, check the shortcut's **Properties**: the patched app's target is
+inside `%LOCALAPPDATA%\Programs\ChatGPT-RT-AI`.
+
+Try an RTL sentence containing English words in both the typing area and a
+response. Check that RTL prose reads naturally and code blocks remain
+left-to-right. The patch improves RTL rendering; it does not guarantee
+perfect handling of every mixed-language case.
+
+### Updates and troubleshooting
+
+The Microsoft Store updates the original app. The automatic update task
+rebuilds the patched copy while ChatGPT is closed.
+
+**"Updates Unavailable" inside the patched app is expected.** The copied
+app cannot use the Store-integrated in-app update check.
+
+If automatic update setup failed, or the patched app stops opening after a
+Store update, close ChatGPT and run the installation command again. If an
+error remains, report its exact text in
+[a GitHub issue](https://github.com/rt25ai/chatgpt-desktop-rtl-rt-ai/issues).
+
+### Uninstall and return to the original app
+
+Close the patched app, then run this command in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/rt25ai/chatgpt-desktop-rtl-rt-ai/v0.7.2/uninstall-online.ps1 | iex
+```
+
+This removes the patched copy, its shortcuts, and the automatic update
+task. You can then open the original Microsoft Store installation.
+
 ## התקנה - שורה אחת
 
 ### Windows
